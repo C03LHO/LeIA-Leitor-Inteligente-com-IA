@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leia"
+version = "0.1.0"
+description = "LeIA — Leitor Inteligente com IA. Desktop app local que extrai texto limpo de PDFs e narra em pt-BR com XTTS-v2."
+requires-python = ">=3.11,<3.12"
+readme = "README.md"
+authors = [{ name = "Apolo / Aurélio" }]
+
+[tool.setuptools.packages.find]
+include = ["backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

@@ -1,0 +1,17 @@
+LeIA — Leitor Inteligente com IA
+TERMOS DE USO
+
+Esta é uma aplicação de uso pessoal e educacional.
+
+1. O aplicativo roda 100% localmente. Nenhum dado de PDFs ou áudios é enviado
+   para servidores externos. Nenhuma chave de API ou conta é necessária.
+
+2. O modelo de TTS utilizado (Coqui XTTS-v2) possui licença Coqui Public Model
+   License (CPML). Uso COMERCIAL com esse modelo NÃO é permitido sem licença
+   adicional da Coqui. Uso pessoal e educacional está autorizado.
+
+3. O LeIA é fornecido "no estado em que se encontra", sem garantias. Use por
+   sua conta e risco. Não nos responsabilizamos pelo conteúdo dos PDFs lidos
+   nem por qualquer perda de dados.
+
+4. Ao prosseguir com a instalação, você concorda com os termos acima.

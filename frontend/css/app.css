@@ -1,0 +1,127 @@
+:root {
+  --leia-bg: #1a1a1a;
+  --leia-bg-elev: #232323;
+  --leia-fg: #e8e8e8;
+  --leia-fg-muted: #9aa0a6;
+  --leia-accent: #4a9eff;
+  --leia-highlight: rgba(255, 220, 90, 0.22);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--leia-bg);
+  color: var(--leia-fg);
+  min-height: 100vh;
+  padding-bottom: 80px;
+}
+
+.leia-navbar {
+  background-color: var(--leia-bg-elev);
+  border-bottom: 1px solid #2e2e2e;
+}
+
+.leia-logo {
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--leia-accent);
+  letter-spacing: 0.5px;
+}
+
+.leia-card {
+  background-color: var(--leia-bg-elev);
+  border: 1px solid #2e2e2e;
+}
+
+.leia-card .card-header {
+  background-color: transparent;
+  border-bottom: 1px solid #2e2e2e;
+  color: var(--leia-fg-muted);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.dropzone {
+  width: 100%;
+  max-width: 720px;
+  margin-top: 64px;
+  padding: 64px 24px;
+  border: 2px dashed #3a3a3a;
+  border-radius: 16px;
+  background-color: var(--leia-bg-elev);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+.dropzone.dragover {
+  border-color: var(--leia-accent);
+  background-color: #1f2a3a;
+}
+.dropzone-icon {
+  font-size: 4rem;
+  margin-bottom: 12px;
+}
+
+.reader {
+  min-height: 60vh;
+}
+
+#reader-body {
+  font-size: 1.05rem;
+  line-height: 1.7;
+  font-family: "Georgia", "Times New Roman", serif;
+  max-width: 80ch;
+  margin: 0 auto;
+}
+
+#reader-body h1 {
+  font-size: 1.6rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--leia-accent);
+}
+
+#reader-body p {
+  margin-bottom: 1.1rem;
+}
+
+.sentence {
+  border-radius: 4px;
+  padding: 0 2px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.sentence:hover {
+  background-color: rgba(74, 158, 255, 0.12);
+}
+.sentence.active {
+  background-color: var(--leia-highlight);
+}
+
+#toc li a {
+  display: block;
+  padding: 6px 10px;
+  color: var(--leia-fg);
+  text-decoration: none;
+  border-radius: 4px;
+}
+#toc li a:hover {
+  background-color: #2a2a2a;
+}
+
+.player-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--leia-bg-elev);
+  border-top: 1px solid #2e2e2e;
+  padding: 10px 0;
+  z-index: 100;
+}
+
+#hw-badge.bg-success { background-color: #1d7a3e !important; }
+#hw-badge.bg-warning { color: #1a1a1a; }

@@ -1,0 +1,17 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+fastapi==0.110.3
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+websockets==12.0
+
+PyMuPDF==1.24.1
+pyphen==0.15.0
+nltk==3.8.1
+
+TTS==0.22.0
+torch==2.1.2+cu121
+torchaudio==2.1.2+cu121
+
+pydub==0.25.1
+numpy==1.26.4
