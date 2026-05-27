@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import io
 import threading
+import wave
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 
-from backend.tts.voices import Voice, get_voice
+from backend.tts.voices import DEFAULT_VOICE_ID, Voice, resolve_voice
 from backend.utils.logging import get_logger
 
 logger = get_logger("tts.engine")
@@ -51,12 +51,7 @@ def detect_hardware() -> HardwareInfo:
 
 
 class TTSEngine:
-    """Lazy wrapper around Coqui XTTS-v2.
-
-    The actual model is loaded on first use to keep boot fast and to allow
-    the rest of the app (PDF pipeline, frontend) to work even when the
-    TTS stack isn't installed yet.
-    """
+    """Lazy wrapper around Coqui XTTS-v2 with embedded + custom voice support."""
 
     def __init__(self) -> None:
         self.hardware = detect_hardware()
@@ -93,49 +88,42 @@ class TTSEngine:
                 logger.exception("Falha ao carregar XTTS-v2")
                 raise
 
-    def synthesize_wav(
+    def synthesize(
         self,
         text: str,
-        voice: Voice | str = "default",
+        voice_id: str = DEFAULT_VOICE_ID,
         speed: float = 1.0,
+        language: str = "pt",
     ) -> bytes:
-        """Synthesize the whole text and return a WAV byte string."""
+        assert language == "pt", "Apenas pt-BR é suportado nesta versão"
         self.ensure_loaded()
-        v = voice if isinstance(voice, Voice) else get_voice(voice)
-        speaker_wav = str(v.sample_path) if v.sample_path.exists() else None
-        wav = self._tts.tts(
-            text=text,
-            language=v.language,
-            speaker_wav=speaker_wav,
-            speed=speed,
-        )
+        voice = resolve_voice(voice_id)
+        wav = self._invoke_tts(text, voice, speed, language)
         return _wav_bytes_from_array(wav)
 
-    def synthesize_sentence_stream(
+    def synthesize_to_array(
         self,
-        sentences: list[str],
-        voice: Voice | str = "default",
+        text: str,
+        voice_id: str = DEFAULT_VOICE_ID,
         speed: float = 1.0,
+        language: str = "pt",
     ):
-        """Yield (index, sentence, wav_bytes) for each sentence."""
         self.ensure_loaded()
-        v = voice if isinstance(voice, Voice) else get_voice(voice)
-        speaker_wav = str(v.sample_path) if v.sample_path.exists() else None
-        for i, sentence in enumerate(sentences):
-            if not sentence.strip():
-                continue
-            wav = self._tts.tts(
-                text=sentence,
-                language=v.language,
-                speaker_wav=speaker_wav,
-                speed=speed,
-            )
-            yield i, sentence, _wav_bytes_from_array(wav)
+        voice = resolve_voice(voice_id)
+        return self._invoke_tts(text, voice, speed, language)
+
+    def _invoke_tts(self, text: str, voice: Voice, speed: float, language: str):
+        kwargs: dict = {"text": text, "language": language, "speed": speed}
+        if voice.kind == "embedded" and voice.speaker:
+            kwargs["speaker"] = voice.speaker
+        elif voice.kind == "custom" and voice.wav_path:
+            kwargs["speaker_wav"] = voice.wav_path
+        else:
+            raise ValueError(f"Voz {voice.id} sem speaker nem speaker_wav")
+        return self._tts.tts(**kwargs)
 
 
 def _wav_bytes_from_array(samples) -> bytes:
-    import wave
-
     arr = np.asarray(samples, dtype=np.float32)
     arr = np.clip(arr, -1.0, 1.0)
     pcm = (arr * 32767.0).astype(np.int16)
@@ -146,6 +134,11 @@ def _wav_bytes_from_array(samples) -> bytes:
         wf.setframerate(SAMPLE_RATE)
         wf.writeframes(pcm.tobytes())
     return buf.getvalue()
+
+
+def wav_duration_seconds(wav_bytes: bytes) -> float:
+    with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
+        return wf.getnframes() / float(wf.getframerate() or 1)
 
 
 _engine: TTSEngine | None = None

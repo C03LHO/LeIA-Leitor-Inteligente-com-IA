@@ -1,0 +1,49 @@
+:root {
+  --bg-canvas:     #0e0e10;
+  --bg-surface:    #161618;
+  --bg-elevated:   #1f1f23;
+  --bg-overlay:    #2a2a2f;
+
+  --fg-primary:    #ececec;
+  --fg-secondary:  #a8a8b3;
+  --fg-tertiary:   #6e6e7a;
+  --fg-disabled:   #4a4a52;
+
+  --accent:         #f59e0b;
+  --accent-hover:   #fbbf24;
+  --accent-muted:   rgba(245, 158, 11, 0.15);
+  --accent-glow:    rgba(245, 158, 11, 0.35);
+
+  --success:        #10b981;
+  --warning:        #f59e0b;
+  --danger:         #f43f5e;
+  --info:           #3b82f6;
+
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong:  rgba(255, 255, 255, 0.18);
+
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-reader: "Charter", "Iowan Old Style", "Georgia", "Cambria", serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  --space-1: 4px;  --space-2: 8px;   --space-3: 12px;
+  --space-4: 16px; --space-5: 24px;  --space-6: 32px;
+  --space-7: 48px; --space-8: 64px;  --space-9: 96px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --t-fast: 120ms;
+  --t-base: 180ms;
+  --t-slow: 280ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  --reader-fontsize: 19px;
+  --topbar-h: 56px;
+  --player-h: 80px;
+  --sidebar-w: 280px;
+  --sidebar-w-collapsed: 56px;
+}

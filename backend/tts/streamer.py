@@ -11,12 +11,6 @@ _CACHE_LIMIT_BYTES = 500 * 1024 * 1024
 
 
 def split_sentences(text: str) -> list[str]:
-    """Best-effort sentence split for pt-BR.
-
-    Tries NLTK punkt first; falls back to a regex that splits on terminal
-    punctuation followed by a capital letter. Always preserves the original
-    terminal punctuation.
-    """
     text = text.strip()
     if not text:
         return []
@@ -44,14 +38,14 @@ def split_sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def get_or_synthesize(text: str, voice: str, speed: float) -> bytes:
-    """Return cached WAV bytes for (text, voice, speed) or synthesize and cache."""
-    path = audio_cache_path(text, voice, speed)
+def get_or_synthesize(text: str, voice_id: str, speed: float) -> bytes:
+    """Return cached WAV bytes for (text, voice_id, speed) or synthesize and cache."""
+    path = audio_cache_path(text, voice_id, speed)
     if path.exists():
         return path.read_bytes()
     from backend.tts.engine import get_engine
 
-    wav = get_engine().synthesize_wav(text, voice, speed)
+    wav = get_engine().synthesize(text, voice_id=voice_id, speed=speed)
     path.write_bytes(wav)
     _enforce_cache_limit()
     return wav

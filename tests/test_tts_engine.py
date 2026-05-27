@@ -4,7 +4,12 @@ import pytest
 
 from backend.tts.engine import detect_hardware, get_engine
 from backend.tts.streamer import split_sentences
-from backend.tts.voices import builtin_voices, get_voice
+from backend.tts.voices import (
+    DEFAULT_VOICE_ID,
+    EMBEDDED_VOICES,
+    all_voices,
+    resolve_voice,
+)
 
 
 def test_detect_hardware_returns_struct():
@@ -13,11 +18,28 @@ def test_detect_hardware_returns_struct():
     assert isinstance(hw.cuda_available, bool)
 
 
-def test_builtin_voices_default():
-    voices = builtin_voices()
-    assert any(v.id == "default" for v in voices)
-    v = get_voice("default")
+def test_embedded_catalog_has_ten_voices():
+    assert len(EMBEDDED_VOICES) == 10
+    ids = [v.id for v in EMBEDDED_VOICES]
+    assert len(set(ids)) == 10
+    assert DEFAULT_VOICE_ID in ids
+
+
+def test_resolve_voice_default():
+    v = resolve_voice(DEFAULT_VOICE_ID)
     assert v.language == "pt"
+    assert v.kind == "embedded"
+    assert v.speaker
+
+
+def test_resolve_voice_unknown_raises():
+    with pytest.raises(KeyError):
+        resolve_voice("does_not_exist")
+
+
+def test_all_voices_includes_embedded():
+    voices = all_voices()
+    assert len(voices) >= 10
 
 
 def test_get_engine_singleton():
@@ -32,8 +54,6 @@ def test_split_sentences_handles_pt_punct():
 
 
 def test_engine_load_optional():
-    """O modelo XTTS é pesado e pode não estar instalado em CI.
-    Quando não estiver, ensure_loaded() levanta — toleramos ambas as situações."""
     engine = get_engine()
     try:
         engine.ensure_loaded()

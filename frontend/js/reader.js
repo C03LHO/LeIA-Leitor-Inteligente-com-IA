@@ -3,88 +3,152 @@
 
   function splitSentences(text) {
     if (!text) return [];
-    return text
-      .split(SENT_SPLIT_RE)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    return text.split(SENT_SPLIT_RE).map((s) => s.trim()).filter(Boolean);
   }
 
+  /**
+   * Sentence model:
+   *   { id, text, sectionIndex, paragraphIndex, sentenceIndexInParagraph, el }
+   */
+  const state = {
+    sections: [],
+    sentences: [],
+    sentenceById: new Map(),
+    activeSentenceId: null,
+  };
+
   function renderDocument(doc) {
-    document.getElementById("doc-title").textContent = doc.metadata.filename;
-    document.getElementById("btn-close-doc").classList.remove("d-none");
-    document.getElementById("view-upload").classList.add("d-none");
-    document.getElementById("view-reader").classList.remove("d-none");
-    document.getElementById("player-bar").classList.remove("d-none");
+    document.getElementById("doc-title").textContent =
+      `${doc.metadata.filename}  ·  ${doc.metadata.pages} págs`;
+    document.getElementById("doc-title").classList.remove("hidden");
+    document.getElementById("btn-close-doc").classList.remove("hidden");
+    document.getElementById("view-welcome").classList.add("hidden");
+    document.getElementById("view-processing").classList.add("hidden");
+    document.getElementById("main-body").classList.remove("hidden");
+    document.getElementById("player-bar").classList.remove("hidden");
+    document.getElementById("app").classList.remove("no-doc");
+
+    state.sections = [];
+    state.sentences = [];
+    state.sentenceById.clear();
+    state.activeSentenceId = null;
 
     const toc = document.getElementById("toc");
     toc.innerHTML = "";
-    const body = document.getElementById("reader-body");
+    const body = document.getElementById("reader");
     body.innerHTML = "";
 
-    const sentenceList = [];
-    let sentenceCounter = 0;
+    doc.sections.forEach((sec, sIdx) => {
+      const sectionStartIdx = state.sentences.length;
 
-    doc.sections.forEach((sec) => {
       if (sec.title) {
         const h = document.createElement("h1");
-        h.id = sec.id;
+        h.id = `sec-${sIdx}`;
         h.textContent = sec.title;
         body.appendChild(h);
+
         const li = document.createElement("li");
-        const a = document.createElement("a");
-        a.href = "#" + sec.id;
-        a.textContent = sec.title;
-        li.appendChild(a);
+        li.className = "toc-item";
+        li.dataset.sectionIndex = String(sIdx);
+        li.textContent = sec.title;
+        li.addEventListener("click", () => {
+          h.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
         toc.appendChild(li);
       }
-      sec.paragraphs.forEach((p) => {
+
+      sec.paragraphs.forEach((p, pIdx) => {
         const para = document.createElement("p");
-        para.dataset.paragraphId = p.id;
-        splitSentences(p.text).forEach((sentText) => {
+        const sentences = splitSentences(p.text);
+        sentences.forEach((sentText, siIdx) => {
+          const sid = `s${sIdx}_p${pIdx}_${siIdx}`;
           const span = document.createElement("span");
           span.className = "sentence";
-          span.dataset.sentenceIndex = String(sentenceCounter);
+          span.dataset.sid = sid;
           span.textContent = sentText + " ";
+          span.addEventListener("click", () => {
+            const ev = new CustomEvent("leia:sentence-click", { detail: { sid } });
+            window.dispatchEvent(ev);
+          });
           para.appendChild(span);
-          sentenceList.push({ index: sentenceCounter, text: sentText, el: span });
-          sentenceCounter++;
+          const s = {
+            id: sid, text: sentText, el: span,
+            sectionIndex: sIdx, paragraphIndex: pIdx, indexInParagraph: siIdx,
+            globalIndex: state.sentences.length,
+          };
+          state.sentences.push(s);
+          state.sentenceById.set(sid, s);
         });
         body.appendChild(para);
       });
+
+      state.sections.push({
+        index: sIdx,
+        title: sec.title || "",
+        sentenceStart: sectionStartIdx,
+        sentenceEnd: state.sentences.length,
+      });
     });
 
-    renderCleaningStats(doc.metadata);
-    window.LeIA.player.setSentences(sentenceList);
+    if (state.sections.length === 0 || state.sentences.length === 0) {
+      body.innerHTML = `<p style="color: var(--fg-tertiary);">Nenhum texto extraído. Este PDF pode estar protegido ou ser uma imagem escaneada.</p>`;
+    }
+
+    window.dispatchEvent(new CustomEvent("leia:document-loaded"));
   }
 
-  function renderCleaningStats(meta) {
-    const wrap = document.getElementById("cleaning-stats");
-    const reasons = meta.removal_reasons || {};
-    const total = meta.removed_chars || 0;
-    const kept = meta.extracted_chars || 0;
-    const sum = total + kept;
-    const pct = sum > 0 ? ((total / sum) * 100).toFixed(1) : "0.0";
-    const rows = Object.entries(reasons)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `<li><span class="text-secondary">${k}:</span> ${v}</li>`)
-      .join("");
-    wrap.innerHTML = `
-      <div>Páginas: <strong>${meta.pages}</strong></div>
-      <div>Texto mantido: <strong>${kept.toLocaleString("pt-BR")}</strong> chars</div>
-      <div>Removido: <strong>${total.toLocaleString("pt-BR")}</strong> chars (${pct}%)</div>
-      <ul class="mt-2 mb-0 ps-3">${rows}</ul>
-    `;
+  function highlight(sid) {
+    if (state.activeSentenceId) {
+      const prev = state.sentenceById.get(state.activeSentenceId);
+      if (prev) prev.el.classList.remove("active");
+    }
+    state.activeSentenceId = sid;
+    if (!sid) return;
+    const s = state.sentenceById.get(sid);
+    if (!s) return;
+    s.el.classList.add("active");
+    s.el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    const sec = state.sections[s.sectionIndex];
+    document.querySelectorAll(".toc-item").forEach((li) => li.classList.remove("active"));
+    const activeToc = document.querySelector(`.toc-item[data-section-index="${s.sectionIndex}"]`);
+    if (activeToc) activeToc.classList.add("active");
+    const label = document.getElementById("section-label");
+    if (label && sec) {
+      label.textContent = sec.title
+        ? `${sec.title}  ·  seção ${s.sectionIndex + 1} de ${state.sections.length}`
+        : `Seção ${s.sectionIndex + 1} de ${state.sections.length}`;
+    }
+    document.getElementById("now-reading").textContent = s.text;
+  }
+
+  function setReaderFontSize(px) {
+    document.documentElement.style.setProperty("--reader-fontsize", px + "px");
+    try { localStorage.setItem("leia.reader.size", String(px)); } catch {}
   }
 
   function reset() {
     document.getElementById("doc-title").textContent = "";
-    document.getElementById("btn-close-doc").classList.add("d-none");
-    document.getElementById("view-upload").classList.remove("d-none");
-    document.getElementById("view-reader").classList.add("d-none");
-    document.getElementById("player-bar").classList.add("d-none");
-    document.getElementById("upload-progress").classList.add("d-none");
+    document.getElementById("doc-title").classList.add("hidden");
+    document.getElementById("btn-close-doc").classList.add("hidden");
+    document.getElementById("view-welcome").classList.remove("hidden");
+    document.getElementById("view-processing").classList.add("hidden");
+    document.getElementById("main-body").classList.add("hidden");
+    document.getElementById("player-bar").classList.add("hidden");
+    document.getElementById("app").classList.add("no-doc");
+    state.sections = [];
+    state.sentences = [];
+    state.sentenceById.clear();
+    state.activeSentenceId = null;
   }
 
   window.LeIA = window.LeIA || {};
-  window.LeIA.reader = { renderDocument, reset, splitSentences };
+  window.LeIA.reader = {
+    renderDocument,
+    highlight,
+    reset,
+    setReaderFontSize,
+    splitSentences,
+    state,
+  };
 })();
