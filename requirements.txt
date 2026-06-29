@@ -1,17 +1,20 @@
---extra-index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://download.pytorch.org/whl/cu124
 
-fastapi==0.110.3
-uvicorn[standard]==0.27.1
-python-multipart==0.0.9
-websockets==12.0
+# Web
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
 
+# PDF
 PyMuPDF==1.24.1
 pyphen==0.15.0
 nltk==3.8.1
 
-TTS==0.22.0
-torch==2.1.2+cu121
-torchaudio==2.1.2+cu121
+# Motor TTS: Chatterbox (Resemble AI) — licença MIT, wheel pré-compilado (py3-none-any),
+# instala SEM o compilador C++ da Microsoft. Voz nativa pt-BR via modelo multilíngue.
+chatterbox-tts==0.1.7
+torch==2.6.0+cu124
+torchaudio==2.6.0+cu124
 
-pydub==0.25.1
 numpy==1.26.4

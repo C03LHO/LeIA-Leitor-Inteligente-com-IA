@@ -40,9 +40,13 @@ def synthesize(req: SynthesizeRequest):
 async def tts_stream(ws: WebSocket) -> None:
     """WebSocket de streaming.
 
-    Cliente envia:
+    Cliente envia (preferido — frases já divididas pelo leitor, mapeiam 1:1 ao highlight):
+      { "voice": "ana_florence", "speed": 1.0,
+        "sentences": [{ "id": "s0_p0_0", "text": "..." }, ...] }
+
+    Ou (fallback — texto cru, dividido no servidor; ids não casam com um leitor):
       { "text": "...", "voice": "ana_florence", "speed": 1.0,
-        "sentence_ids": ["p_3_s_0", "p_3_s_1", ...]  # opcional, mesmo tamanho de split }
+        "sentence_ids": ["p_3_s_0", ...]  # opcional, mesmo tamanho do split }
 
     Servidor envia:
       { "type": "plan", "sentences": [{ "id": "p_3_s_0", "text": "..." }, ...] }
@@ -54,12 +58,28 @@ async def tts_stream(ws: WebSocket) -> None:
     await ws.accept()
     try:
         payload: dict[str, Any] = await ws.receive_json()
-        text = (payload.get("text") or "").strip()
         voice = payload.get("voice", DEFAULT_VOICE_ID)
         speed = float(payload.get("speed", 1.0))
-        sentence_ids = payload.get("sentence_ids") or []
 
-        if not text:
+        # Caminho preferido: o cliente envia suas frases já divididas (as mesmas
+        # unidades renderizadas/destacadas no leitor), garantindo que cada chunk de
+        # áudio mapeie 1:1 ao span. Evita a re-divisão (NLTK) divergir do split do JS.
+        client_sentences = payload.get("sentences")
+        if client_sentences:
+            pairs = [
+                (str(s.get("id") or f"s_{i}"), (s.get("text") or "").strip())
+                for i, s in enumerate(client_sentences)
+            ]
+        else:
+            text = (payload.get("text") or "").strip()
+            sentences = split_sentences(text)
+            sentence_ids = payload.get("sentence_ids") or []
+            if len(sentence_ids) != len(sentences):
+                sentence_ids = [f"s_{i}" for i in range(len(sentences))]
+            pairs = list(zip(sentence_ids, sentences))
+
+        pairs = [(sid, txt) for sid, txt in pairs if txt]
+        if not pairs:
             await ws.send_json({"type": "error", "message": "Texto vazio"})
             return
         try:
@@ -68,20 +88,14 @@ async def tts_stream(ws: WebSocket) -> None:
             await ws.send_json({"type": "error", "message": str(exc)})
             return
 
-        sentences = split_sentences(text)
-        if len(sentence_ids) != len(sentences):
-            sentence_ids = [f"s_{i}" for i in range(len(sentences))]
-
         await ws.send_json(
             {
                 "type": "plan",
-                "sentences": [
-                    {"id": sid, "text": s} for sid, s in zip(sentence_ids, sentences)
-                ],
+                "sentences": [{"id": sid, "text": t} for sid, t in pairs],
             }
         )
 
-        for i, (sid, sentence) in enumerate(zip(sentence_ids, sentences)):
+        for i, (sid, sentence) in enumerate(pairs):
             try:
                 wav = get_or_synthesize(sentence, voice, speed)
             except Exception as exc:

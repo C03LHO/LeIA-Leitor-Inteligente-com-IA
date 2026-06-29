@@ -108,12 +108,13 @@ class SetupRunner:
         return "\n".join(out)
 
     def step_models(self) -> None:
-        self.log("[5/5] Baixando modelo XTTS-v2 (~1.8 GB)… isso pode demorar.")
+        self.log("[5/5] Baixando modelo de voz (Chatterbox)… isso pode demorar.")
         py = VENV_DIR / "Scripts" / "python.exe"
         snippet = (
-            "import os; os.environ['COQUI_TOS_AGREED']='1';"
-            "from TTS.api import TTS;"
-            "TTS('tts_models/multilingual/multi-dataset/xtts_v2');"
+            "import torch;"
+            "from chatterbox.mtl_tts import ChatterboxMultilingualTTS;"
+            "ChatterboxMultilingualTTS.from_pretrained("
+            "device='cuda' if torch.cuda.is_available() else 'cpu');"
             "import nltk; nltk.download('punkt_tab', quiet=True);"
             "print('models ok')"
         )

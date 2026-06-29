@@ -38,14 +38,47 @@ def split_sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def get_or_synthesize(text: str, voice_id: str, speed: float) -> bytes:
-    """Return cached WAV bytes for (text, voice_id, speed) or synthesize and cache."""
-    path = audio_cache_path(text, voice_id, speed)
+_ENUM_ONLY_RE = re.compile(
+    r"^\s*\(?\s*(?:\d{1,3}|[ivxlcdmIVXLCDM]{1,7}|\d{1,3}\s*[–—-]\s*\d{1,3})\s*\)?\s*[.)\]:–-]?\s*$"
+)
+
+
+def merge_enumerators(parts: list[str]) -> list[str]:
+    """Junta marcadores de enumeração soltos ('4.', '(1)', '5–6.', 'II.') à frase
+    seguinte. Esses fragmentos sem letras travam o TTS e atrapalham a leitura."""
+    out: list[str] = []
+    carry = ""
+    for p in parts:
+        p = (p or "").strip()
+        if not p:
+            continue
+        if carry:
+            p = f"{carry} {p}"
+            carry = ""
+        if _ENUM_ONLY_RE.match(p):
+            carry = p
+        else:
+            out.append(p)
+    if carry:
+        out.append(carry)
+    return out
+
+
+def get_or_synthesize(text: str, voice_id: str, speed: float = 1.0) -> bytes:
+    """Return cached WAV bytes or synthesize and cache.
+
+    A chave de cache é normalizada: voz única (id canônico) e sempre 1.0x — a
+    velocidade é aplicada no cliente (playbackRate). Assim a pré-geração em
+    background e o playback compartilham exatamente o mesmo cache."""
+    from backend.tts.voices import resolve_voice
+
+    canonical = resolve_voice(voice_id).id
+    path = audio_cache_path(text, canonical, 1.0)
     if path.exists():
         return path.read_bytes()
     from backend.tts.engine import get_engine
 
-    wav = get_engine().synthesize(text, voice_id=voice_id, speed=speed)
+    wav = get_engine().synthesize(text, voice_id=canonical, speed=1.0)
     path.write_bytes(wav)
     _enforce_cache_limit()
     return wav

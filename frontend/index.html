@@ -18,11 +18,12 @@
     <!-- TopBar -->
     <header class="topbar">
       <div class="topbar-left">
-        <div class="brand">
+        <button id="brand-home" class="brand" title="Início — meus livros">
           <span class="brand-mark">L</span>
           <span>LeIA</span>
-        </div>
+        </button>
         <div id="doc-title" class="doc-title hidden"></div>
+        <span id="prep-status" class="prep-status hidden"></span>
       </div>
       <div class="topbar-right">
         <button id="btn-settings" class="btn-icon" title="Configurações" aria-label="Configurações">
@@ -54,14 +55,19 @@
       <div class="welcome">
         <div class="welcome-logo">L</div>
         <h1 class="welcome-title">LeIA</h1>
-        <p class="welcome-sub">Arraste seu PDF aqui ou clique para selecionar</p>
+        <p class="welcome-sub">Arraste seu livro (PDF ou EPUB) aqui ou clique para selecionar</p>
         <div id="dropzone" class="dropzone">
           <div class="dropzone-icon">📄</div>
           <div class="dropzone-title">Solte o arquivo aqui</div>
           <div class="dropzone-sub">ou clique para procurar</div>
-          <input type="file" id="file-input" accept="application/pdf" hidden />
+          <input type="file" id="file-input" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden />
         </div>
-        <div class="welcome-foot">Aceita arquivos .pdf até 200 MB · 100% local · sem internet</div>
+        <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
+
+        <div id="library" class="library hidden">
+          <div class="library-header">Seus livros</div>
+          <div id="library-list" class="library-grid"></div>
+        </div>
       </div>
     </section>
 
@@ -105,27 +111,26 @@
       </div>
 
       <div class="player-progress">
-        <div class="player-meta">
-          <div id="section-label" class="now-reading">—</div>
-          <div id="now-reading" class="now-reading">—</div>
-        </div>
-        <div class="scrubber" id="scrubber">
-          <div class="scrubber-track">
-            <div class="scrubber-buffer" id="scrubber-buffer"></div>
-            <div class="scrubber-fill" id="scrubber-fill"></div>
+        <div id="now-reading" class="now-reading">—</div>
+        <div class="scrubber-row">
+          <div class="scrubber" id="scrubber">
+            <div class="scrubber-track">
+              <div class="scrubber-buffer" id="scrubber-buffer"></div>
+              <div class="scrubber-fill" id="scrubber-fill"></div>
+            </div>
+            <div class="scrubber-thumb" id="scrubber-thumb" style="left: 0%"></div>
           </div>
-          <div class="scrubber-thumb" id="scrubber-thumb" style="left: 0%"></div>
+          <div class="player-time" id="player-time">0/0</div>
         </div>
-        <div class="player-time" id="player-time">0/0</div>
       </div>
 
       <div class="player-controls">
-        <button id="btn-voice" class="btn btn-outline" title="Voz">🎙 <span id="voice-label">Ana</span></button>
+        <button id="btn-voice" class="btn btn-outline hidden" title="Voz">🎙 <span id="voice-label">Padrão</span></button>
         <button id="btn-speed" class="btn btn-outline" title="Velocidade (− / +)"><span id="speed-label">1.0x</span></button>
         <button id="btn-volume" class="btn-icon" title="Volume (↑ ↓ M)">
           <svg id="icon-volume" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
         </button>
-        <button id="btn-download" class="btn-icon" title="Baixar MP3 da seção atual">
+        <button id="btn-download" class="btn-icon" title="Baixar áudio (WAV) da seção atual">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
         </button>
       </div>
@@ -143,7 +148,7 @@
   </div>
 
   <div id="volume-popover" class="popover volume-popover" style="bottom: calc(var(--player-h) + 8px);">
-    <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100" orient="vertical" />
+    <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100" />
     <span class="volume-value" id="volume-value">100</span>
   </div>
 

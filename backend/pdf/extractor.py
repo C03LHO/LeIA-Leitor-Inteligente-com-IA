@@ -56,7 +56,13 @@ def extract_blocks(pdf_path: str | Path) -> list[RawBlock]:
     reflow and column detection.
     """
     blocks: list[RawBlock] = []
-    with fitz.open(pdf_path) as doc:
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as exc:
+        raise ValueError("Não foi possível abrir o PDF — ele pode estar corrompido.") from exc
+    with doc:
+        if doc.needs_pass:
+            raise ValueError("PDF protegido por senha. Remova a proteção e tente novamente.")
         for page_index, page in enumerate(doc):
             page_dict = page.get_text("dict")
             rotation = page.rotation
@@ -104,6 +110,19 @@ def extract_blocks(pdf_path: str | Path) -> list[RawBlock]:
                     )
                 )
     return blocks
+
+
+def render_cover(pdf_path: str | Path, out_path: str | Path, width: int = 420) -> bool:
+    """Renderiza a 1ª página do PDF como PNG (capa do livro na estante)."""
+    with fitz.open(pdf_path) as doc:
+        if doc.page_count == 0:
+            return False
+        page = doc[0]
+        page_w = page.rect.width or width
+        zoom = max(0.1, width / page_w)
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        pix.save(str(out_path))
+        return True
 
 
 def page_dimensions(pdf_path: str | Path) -> list[tuple[float, float]]:

@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 import io
+import re
 import threading
+import unicodedata
 import wave
 from dataclasses import dataclass
 
 import numpy as np
 
-from backend.tts.voices import DEFAULT_VOICE_ID, Voice, resolve_voice
+from backend.tts.voices import DEFAULT_VOICE_ID, resolve_voice
 from backend.utils.logging import get_logger
 
 logger = get_logger("tts.engine")
 
-XTTS_MODEL_ID = "tts_models/multilingual/multi-dataset/xtts_v2"
+# Chatterbox Multilingual gera áudio em 24 kHz mono.
 SAMPLE_RATE = 24000
+LANGUAGE_ID = "pt"
 
 
 @dataclass
@@ -51,12 +54,13 @@ def detect_hardware() -> HardwareInfo:
 
 
 class TTSEngine:
-    """Lazy wrapper around Coqui XTTS-v2 with embedded + custom voice support."""
+    """Lazy wrapper around Chatterbox Multilingual TTS (single native pt-BR voice)."""
 
     def __init__(self) -> None:
         self.hardware = detect_hardware()
         self._tts = None
         self._lock = threading.Lock()
+        self._synth_lock = threading.Lock()  # serializa o uso da GPU (pré-geração + playback)
         self._load_error: str | None = None
 
     @property
@@ -74,18 +78,14 @@ class TTSEngine:
             if self._tts is not None:
                 return
             try:
-                from TTS.api import TTS  # heavy import
+                from chatterbox.mtl_tts import ChatterboxMultilingualTTS  # heavy import
 
-                logger.info(
-                    "Carregando XTTS-v2 (device=%s, gpu=%s)",
-                    self.hardware.device,
-                    self.hardware.gpu_name,
-                )
-                gpu = self.hardware.cuda_available
-                self._tts = TTS(XTTS_MODEL_ID, gpu=gpu)
+                device = "cuda" if self.hardware.cuda_available else "cpu"
+                logger.info("Carregando Chatterbox (device=%s, gpu=%s)", device, self.hardware.gpu_name)
+                self._tts = ChatterboxMultilingualTTS.from_pretrained(device=device)
             except Exception as exc:
                 self._load_error = str(exc)
-                logger.exception("Falha ao carregar XTTS-v2")
+                logger.exception("Falha ao carregar Chatterbox")
                 raise
 
     def synthesize(
@@ -95,32 +95,61 @@ class TTSEngine:
         speed: float = 1.0,
         language: str = "pt",
     ) -> bytes:
-        assert language == "pt", "Apenas pt-BR é suportado nesta versão"
+        # `speed` é aplicado no cliente (playbackRate); a síntese é sempre em 1.0.
         self.ensure_loaded()
-        voice = resolve_voice(voice_id)
-        wav = self._invoke_tts(text, voice, speed, language)
-        return _wav_bytes_from_array(wav)
+        resolve_voice(voice_id)  # valida/normaliza (voz única)
+        clean = _sanitize_text(text)
+        # Texto sem conteúdo falável (ex.: "4.", "(1)", "5–6.") faz o Chatterbox
+        # disparar um device-side assert que ENVENENA o contexto CUDA (toda síntese
+        # seguinte falha). Então nem chamamos o modelo: devolvemos um silêncio curto.
+        if sum(ch.isalpha() for ch in clean) < 2:
+            return _silence_wav(0.18)
+        with self._synth_lock:
+            try:
+                wav = self._tts.generate(clean, language_id=LANGUAGE_ID)
+            except RuntimeError as exc:
+                if "CUDA" in str(exc):
+                    logger.error("Erro CUDA na síntese; recarregando o modelo e tentando de novo")
+                    self._reload_locked()
+                    wav = self._tts.generate(clean, language_id=LANGUAGE_ID)
+                else:
+                    raise
+        return _wav_bytes_from_array(_to_mono_float(wav))
 
-    def synthesize_to_array(
-        self,
-        text: str,
-        voice_id: str = DEFAULT_VOICE_ID,
-        speed: float = 1.0,
-        language: str = "pt",
-    ):
+    def _reload_locked(self) -> None:
+        """Best-effort: recarrega o modelo após um erro CUDA (chamado sob _synth_lock)."""
+        self._tts = None
+        try:
+            import torch
+
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
         self.ensure_loaded()
-        voice = resolve_voice(voice_id)
-        return self._invoke_tts(text, voice, speed, language)
 
-    def _invoke_tts(self, text: str, voice: Voice, speed: float, language: str):
-        kwargs: dict = {"text": text, "language": language, "speed": speed}
-        if voice.kind == "embedded" and voice.speaker:
-            kwargs["speaker"] = voice.speaker
-        elif voice.kind == "custom" and voice.wav_path:
-            kwargs["speaker_wav"] = voice.wav_path
-        else:
-            raise ValueError(f"Voz {voice.id} sem speaker nem speaker_wav")
-        return self._tts.tts(**kwargs)
+
+def _sanitize_text(text: str) -> str:
+    """Normaliza unicode, remove caracteres de controle e limita o tamanho —
+    reduz a chance de tokens fora do alcance que travam o modelo."""
+    t = unicodedata.normalize("NFC", text or "")
+    t = "".join(ch for ch in t if ch in (" ", "\t", "\n") or unicodedata.category(ch)[0] != "C")
+    t = re.sub(r"\s+", " ", t).strip()
+    return t[:800]
+
+
+def _silence_wav(seconds: float = 0.18) -> bytes:
+    n = max(1, int(SAMPLE_RATE * seconds))
+    return _wav_bytes_from_array(np.zeros(n, dtype=np.float32))
+
+
+def _to_mono_float(wav) -> np.ndarray:
+    """Aceita tensor torch [1, N] / [N] ou ndarray e devolve float32 1D."""
+    if hasattr(wav, "detach"):
+        wav = wav.detach().cpu().numpy()
+    arr = np.asarray(wav, dtype=np.float32)
+    if arr.ndim > 1:
+        arr = arr.reshape(-1) if 1 in arr.shape else arr.mean(axis=0)
+    return arr
 
 
 def _wav_bytes_from_array(samples) -> bytes:

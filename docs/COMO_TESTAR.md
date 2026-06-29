@@ -19,7 +19,7 @@ pip install fastapi==0.110.3 uvicorn[standard]==0.27.1 python-multipart==0.0.9 ^
     websockets==12.0 PyMuPDF==1.24.1 pyphen==0.15.0 nltk==3.8.1 ^
     pydub==0.25.1 numpy==1.26.4 ^
     pytest==8.1.1 httpx==0.27.0 reportlab==4.1.0
-# (TTS e torch são opcionais para testar a parte de PDF / UI)
+# (coqui-tts e torch são opcionais para testar a parte de PDF / UI)
 
 python -m backend.main
 ```
@@ -64,6 +64,6 @@ Get-Content "$env:APPDATA\LeIA\logs\leia.log" -Tail 50 -Wait
 
 ## PDFs problemáticos
 
-- **PDF protegido por senha**: `extract_blocks` propaga o erro do PyMuPDF; o endpoint retorna 500 com mensagem. **TODO**: capturar e devolver 400 amigável.
-- **PDF escaneado (imagem)**: blocos vão vir vazios; a UI mostra "extracted_chars=0". Exibir aviso "Este PDF parece ser uma imagem — use OCR antes".
-- **PDF corrompido**: `fitz.open()` falha; tratamento idêntico ao protegido.
+- **PDF protegido por senha**: `extract_blocks` detecta `doc.needs_pass` e levanta `ValueError`; `extract-sync` devolve 400 amigável e o job assíncrono guarda a mensagem em `error`.
+- **PDF escaneado (imagem)**: blocos vêm vazios; a UI mostra a mensagem "Nenhum texto extraído… pode estar protegido ou ser uma imagem escaneada".
+- **PDF corrompido**: `fitz.open()` falha e é convertido em `ValueError` ("pode estar corrompido"); mesmo tratamento amigável do protegido.

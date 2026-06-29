@@ -1,11 +1,12 @@
 (function () {
   const state = {
-    voiceId: "ana_florence",
+    voiceId: "natural",
     speed: 1.0,
     volume: 1.0,
     muted: false,
     isPlaying: false,
     isBuffering: false,
+    audioReady: true, // liberado só quando a pré-geração termina
     currentSentenceId: null,
     audioQueue: [],
     bufferedIds: new Set(),
@@ -13,6 +14,26 @@
     socket: null,
     sectionAudioBlobs: [], // for download
   };
+
+  function setReady(ready) {
+    state.audioReady = !!ready;
+    const btn = document.getElementById("btn-play");
+    if (btn) btn.classList.toggle("locked", !ready);
+  }
+
+  function restorePosition(globalIndex) {
+    const r = window.LeIA.reader.state;
+    if (!r.sentences.length) return;
+    const idx = Math.max(0, Math.min(r.sentences.length - 1, parseInt(globalIndex, 10) || 0));
+    state.currentSentenceId = r.sentences[idx].id;
+    window.LeIA.reader.highlight(state.currentSentenceId);
+    updateProgress();
+  }
+
+  function saveProgress() {
+    const cur = currentSentence();
+    if (cur && window.LeIA.saveProgress) window.LeIA.saveProgress(cur.globalIndex);
+  }
 
   function loadPrefs() {
     try {
@@ -58,6 +79,11 @@
     const s = currentSentence();
     if (!s) return null;
     return window.LeIA.reader.state.sections[s.sectionIndex];
+  }
+
+  function currentIndex() {
+    const s = currentSentence();
+    return s ? s.globalIndex : 0;
   }
 
   function updateProgress() {
@@ -125,8 +151,6 @@
     if (!s) return;
     const sec = r.sections[s.sectionIndex];
     const slice = r.sentences.slice(s.globalIndex, sec.sentenceEnd);
-    const text = slice.map((x) => x.text).join(" ");
-    const ids = slice.map((x) => x.id);
 
     state.isPlaying = true;
     state.isBuffering = true;
@@ -135,10 +159,8 @@
     state.socket = window.LeIA.api.openTTSSocket();
     state.socket.onopen = () => {
       state.socket.send(JSON.stringify({
-        text,
+        sentences: slice.map((x) => ({ id: x.id, text: x.text })),
         voice: state.voiceId,
-        speed: state.speed,
-        sentence_ids: ids,
       }));
     };
     state.socket.onmessage = (ev) => {
@@ -181,9 +203,11 @@
     state.currentSentenceId = item.sentence_id;
     window.LeIA.reader.highlight(item.sentence_id);
     updateProgress();
+    saveProgress();
 
     state.audio = new Audio("data:audio/wav;base64," + item.audio_b64);
     state.audio.volume = state.muted ? 0 : state.volume;
+    state.audio.playbackRate = state.speed;
     state.audio.onplay = () => {
       state.isBuffering = false;
       setPlayIcon("pause");
@@ -203,6 +227,10 @@
   }
 
   function toggle() {
+    if (!state.isPlaying && !state.audioReady) {
+      window.LeIA.toast("⏳ A narração ainda está sendo preparada. Aguarde ficar pronta.", "info");
+      return;
+    }
     if (!state.isPlaying) {
       startFromCurrent();
     } else if (state.audio && !state.audio.paused) {
@@ -226,6 +254,7 @@
     state.currentSentenceId = sid;
     window.LeIA.reader.highlight(sid);
     updateProgress();
+    saveProgress();
     if (wasPlaying) startFromCurrent();
   }
 
@@ -254,10 +283,8 @@
     state.speed = value;
     savePref("leia.speed", value);
     document.getElementById("speed-label").textContent = value.toFixed(2).replace(/0$/,'') + "x";
-    if (state.isPlaying) {
-      stop();
-      startFromCurrent();
-    }
+    // Velocidade é playbackRate no navegador → muda ao vivo, sem re-sintetizar.
+    if (state.audio) state.audio.playbackRate = value;
   }
 
   function bumpSpeed(delta) {
@@ -312,7 +339,7 @@
       const resp = await fetch("/api/tts/synthesize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice: state.voiceId, speed: state.speed }),
+        body: JSON.stringify({ text, voice: state.voiceId }),
       });
       if (!resp.ok) throw new Error(await resp.text());
       const blob = await resp.blob();
@@ -343,9 +370,12 @@
     function close() { popover.classList.remove("open"); }
     function open() {
       const rect = button.getBoundingClientRect();
-      popover.style.left = `${rect.left}px`;
+      popover.classList.add("open"); // precisa estar visível para medir a largura
+      const pw = popover.offsetWidth || 160;
+      let left = rect.left + rect.width / 2 - pw / 2; // centraliza sobre o botão
+      left = Math.max(8, Math.min(left, window.innerWidth - pw - 8)); // prende na tela
+      popover.style.left = `${left}px`;
       popover.style.bottom = `calc(100vh - ${rect.top - 8}px)`;
-      popover.classList.add("open");
     }
     button.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -413,6 +443,6 @@
   window.LeIA = window.LeIA || {};
   window.LeIA.player = {
     initPlayer, stop, toggle, jumpToSentence, moveSentence, moveSection,
-    setSpeed, setVoice, setVolume, toggleMute, state,
+    setSpeed, setVoice, setVolume, toggleMute, setReady, restorePosition, currentIndex, state,
   };
 })();

@@ -20,6 +20,15 @@ def pdf_upload_path(job_id: str) -> Path:
     return pdf_dir / f"{job_id}.pdf"
 
 
+def book_upload_path(job_id: str, ext: str = ".pdf") -> Path:
+    """Caminho do arquivo original (PDF ou EPUB), preservando a extensão."""
+    pdf_dir = CACHE_DIR / "pdf"
+    pdf_dir.mkdir(parents=True, exist_ok=True)
+    if not ext.startswith("."):
+        ext = "." + ext
+    return pdf_dir / f"{job_id}{ext}"
+
+
 def pdf_result_path(job_id: str) -> Path:
     pdf_dir = CACHE_DIR / "pdf"
     pdf_dir.mkdir(parents=True, exist_ok=True)

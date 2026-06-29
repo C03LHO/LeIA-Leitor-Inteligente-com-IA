@@ -22,7 +22,8 @@ pip install -r requirements-dev.txt
 python -m backend.main
 ```
 
-Abra `http://127.0.0.1:8765/` no navegador. Resposta esperada na raiz:
+Abra `http://127.0.0.1:8765/` no navegador — a raiz serve a interface. O JSON de
+status fica em `http://127.0.0.1:8765/api`:
 
 ```json
 {"status": "ok", "name": "LeIA", "version": "0.1.0"}

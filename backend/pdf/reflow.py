@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pyphen
 
@@ -24,6 +24,7 @@ class Paragraph:
     id: str
     text: str
     page: int
+    sentences: list = field(default_factory=list)
 
 
 @dataclass
@@ -38,7 +39,10 @@ class Section:
             "id": self.id,
             "level": self.level,
             "title": self.title,
-            "paragraphs": [{"id": p.id, "text": p.text, "page": p.page} for p in self.paragraphs],
+            "paragraphs": [
+                {"id": p.id, "text": p.text, "page": p.page, "sentences": p.sentences}
+                for p in self.paragraphs
+            ],
         }
 
 
@@ -64,6 +68,20 @@ def _merge_hyphen_break(prev: str, nxt: str) -> str:
     if _is_real_hyphenated_word(left, right):
         return prev + nxt
     return prev[:-1] + nxt
+
+
+_EDGE_MARKERS = set('"\'`&*†‡§¶()[]{}<>|~^_+=\\/')
+
+
+def _strip_edge_markers(text: str) -> str:
+    """Remove ruído de marcadores de nota/figura nas pontas (ex.: títulos que vêm
+    com âncoras de rodapé grudadas: 'As Nove Situações (*', 'Variação de Táticas &')."""
+    out = text.strip()
+    while out and out[-1] in _EDGE_MARKERS:
+        out = out[:-1].rstrip()
+    while out and out[0] in _EDGE_MARKERS:
+        out = out[1:].lstrip()
+    return out or text.strip()
 
 
 def _join_block_lines(text: str) -> str:
@@ -169,7 +187,7 @@ def build_sections(
             current = Section(
                 id=f"sec_{sec_counter}",
                 level=1,
-                title=joined,
+                title=_strip_edge_markers(joined),
                 paragraphs=[],
             )
             sections.append(current)
@@ -197,8 +215,22 @@ def build_sections(
     return sections, stats
 
 
-def build_document(blocks: list[RawBlock], pdf_path: str, filename: str) -> dict:
-    sections, stats = build_sections(blocks, pdf_path)
+def build_document(
+    blocks: list[RawBlock], pdf_path: str, filename: str, cfg: CleaningConfig | None = None
+) -> dict:
+    sections, stats = build_sections(blocks, pdf_path, cfg)
+
+    # Divisão de frases no backend → ids estáveis no JSON. O frontend renderiza a
+    # partir disso e a pré-geração de áudio usa exatamente as mesmas frases (cache casa).
+    from backend.tts.streamer import merge_enumerators, split_sentences
+
+    for sec in sections:
+        for p in sec.paragraphs:
+            parts = merge_enumerators(split_sentences(p.text))
+            p.sentences = [
+                {"id": f"{p.id}_s{i}", "text": t} for i, t in enumerate(parts) if t
+            ]
+
     total_pages = (max((b.page for b in blocks), default=-1) + 1)
     extracted_chars = sum(len(p.text) for s in sections for p in s.paragraphs) + sum(
         len(s.title) for s in sections

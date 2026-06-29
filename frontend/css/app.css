@@ -13,6 +13,7 @@ html, body {
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.5;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -35,6 +36,8 @@ a:hover { color: var(--accent-hover); }
   display: grid;
   grid-template-rows: var(--topbar-h) 1fr var(--player-h);
   height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 .app.no-doc { grid-template-rows: var(--topbar-h) 1fr; }
 .app.no-doc .player-bar { display: none; }
@@ -96,6 +99,7 @@ a:hover { color: var(--accent-hover); }
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   min-height: 0;
+  min-width: 0;
 }
 .app.collapsed .body-grid { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
 
@@ -160,14 +164,16 @@ a:hover { color: var(--accent-hover); }
    ============================================================ */
 .reader-scroll {
   overflow-y: auto;
-  padding: var(--space-7) var(--space-6);
+  overflow-x: hidden;
+  min-width: 0;
+  padding: var(--space-7) var(--space-7);
 }
 .reader {
-  max-width: 680px;
+  max-width: 1000px;
   margin: 0 auto;
   font-family: var(--font-reader);
   font-size: var(--reader-fontsize);
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--fg-primary);
 }
 .reader h1 {
@@ -208,6 +214,11 @@ a:hover { color: var(--accent-hover); }
   min-height: 100%;
   text-align: center;
 }
+/* Com livros na estante, o herói fica compacto e a estante aparece de imediato. */
+#view-welcome.has-books .welcome { min-height: auto; justify-content: flex-start; padding: var(--space-7) var(--space-5) var(--space-6); }
+#view-welcome.has-books .welcome-logo { width: 36px; height: 36px; font-size: 18px; }
+#view-welcome.has-books .welcome-title { font-size: 22px; }
+#view-welcome.has-books .dropzone { padding: var(--space-5); }
 .welcome-logo {
   width: 48px; height: 48px;
   background: var(--accent);
@@ -367,20 +378,34 @@ a:hover { color: var(--accent-hover); }
 .player-progress {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
   min-width: 0;
 }
-.player-time { font-family: var(--font-mono); font-size: 12px; color: var(--fg-tertiary); min-width: 92px; text-align: center; }
-.now-reading {
+.scrubber-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+.player-time {
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--fg-tertiary);
+  min-width: 48px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.now-reading {
+  font-size: 12px;
+  color: var(--fg-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 320px;
+  max-width: 100%;
+  text-align: center;
 }
-.player-meta { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; flex: 1; gap: 2px; }
 
 /* Progress slider */
 .scrubber {
@@ -461,22 +486,28 @@ a:hover { color: var(--accent-hover); }
 
 /* Volume slider vertical */
 .volume-popover {
-  width: 44px;
-  padding: var(--space-3);
+  width: auto;
+  padding: var(--space-2) var(--space-3);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-3);
 }
 .volume-slider {
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
-  writing-mode: bt-lr;
-  width: 4px; height: 100px;
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px; height: 4px;
+  border-radius: var(--radius-pill);
   background: var(--bg-overlay);
   accent-color: var(--accent);
+  cursor: pointer;
 }
-.volume-value { font-family: var(--font-mono); font-size: 11px; color: var(--fg-tertiary); }
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); cursor: pointer;
+}
+.volume-value { font-family: var(--font-mono); font-size: 11px; color: var(--fg-tertiary); min-width: 26px; text-align: right; }
 
 /* ============================================================
    Voices panel
@@ -687,5 +718,102 @@ kbd {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ============================================================
+   Brand como botão (clicável → início)
+   ============================================================ */
+.brand { background: none; border: none; padding: 0; color: var(--fg-primary); cursor: pointer; }
+.brand:hover .brand-mark { background: var(--accent-hover); }
+
+/* Status de preparo de áudio (topbar) */
+.prep-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+.prep-status.preparing { color: var(--accent); }
+.prep-status.ready { color: var(--success); }
+
+/* ============================================================
+   Biblioteca (tela inicial)
+   ============================================================ */
+.library { width: 100%; max-width: 880px; margin: var(--space-7) auto 0; text-align: left; }
+.library-header {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--fg-tertiary); margin-bottom: var(--space-4);
+}
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-5);
+}
+.book { position: relative; cursor: pointer; }
+.book-cover {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  display: grid; place-items: center;
+  transition: transform var(--t-base) var(--ease),
+              border-color var(--t-base) var(--ease),
+              box-shadow var(--t-base) var(--ease);
+}
+.book:hover .book-cover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.book-cover-fallback { font-size: 40px; opacity: 0.45; }
+.book-cover-img {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0; transition: opacity var(--t-base) var(--ease);
+}
+.book-cover-img.loaded { opacity: 1; }
+.book-badge {
+  position: absolute; bottom: 8px; right: 8px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent); color: var(--bg-canvas);
+  display: grid; place-items: center; font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.book-loading {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(14, 14, 16, 0.55);
+  color: var(--fg-secondary); font-size: 12px; font-weight: 600;
+}
+.spinner {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid var(--border-default); border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.book-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0, 0, 0, 0.45); }
+.book-progress-fill { height: 100%; background: var(--accent); }
+.book-title {
+  margin-top: var(--space-2); font-size: 13px; font-weight: 600; color: var(--fg-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.book-meta { font-size: 11px; color: var(--fg-tertiary); }
+.book-del {
+  position: absolute; top: 6px; left: 6px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: rgba(14, 14, 16, 0.6); border: none; color: var(--fg-secondary);
+  opacity: 0; transition: opacity var(--t-fast) var(--ease);
+}
+.book:hover .book-del { opacity: 1; }
+.book-del:hover { color: var(--danger); }
+
+/* Play travado enquanto a narração é preparada */
+.btn-icon-lg.locked { opacity: 0.4; cursor: not-allowed; }
+.btn-icon-lg.locked:hover { background: var(--accent); transform: none; }
 
 .hidden { display: none !important; }

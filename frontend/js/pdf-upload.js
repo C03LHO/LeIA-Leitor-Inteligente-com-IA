@@ -1,5 +1,23 @@
 (function () {
   const STEPS = ["upload", "extract", "clean", "reflow", "structure"];
+  const CLEANING_KEYS = [
+    "remove_urls",
+    "remove_footnotes",
+    "remove_figure_captions",
+    "remove_headers_footers",
+    "remove_copyright",
+  ];
+
+  // Lê os toggles da aba "Limpeza" (gravados por settings.js em leia.cleaning.<key>)
+  // e monta o objeto enviado ao backend. Só inclui chaves que o usuário tocou.
+  function readCleaningConfig() {
+    const cfg = {};
+    for (const k of CLEANING_KEYS) {
+      const v = localStorage.getItem(`leia.cleaning.${k}`);
+      if (v !== null) cfg[k] = v === "1";
+    }
+    return cfg;
+  }
 
   function setStep(name, status) {
     const li = document.querySelector(`.step[data-step="${name}"]`);
@@ -35,18 +53,24 @@
     if (!dz) return;
 
     async function handle(file) {
-      if (!file || !file.name.toLowerCase().endsWith(".pdf")) {
-        window.LeIA.toast("Envie um arquivo .pdf", "warning");
+      const name = ((file && file.name) || "").toLowerCase();
+      if (!file || !(name.endsWith(".pdf") || name.endsWith(".epub"))) {
+        window.LeIA.toast("Envie um arquivo .pdf ou .epub", "warning");
         return;
       }
       try {
         showProcessing(file.name);
         setStep("upload", "current");
         setProgress(5, "Enviando arquivo…");
+        const cleaning = readCleaningConfig();
+        const extra = Object.keys(cleaning).length
+          ? { cleaning: JSON.stringify(cleaning) }
+          : {};
         const up = await window.LeIA.api.uploadFile(
           "/api/pdf/upload",
           file,
-          (r) => setProgress(5 + r * 25, `Enviando… ${Math.round(r * 100)}%`)
+          (r) => setProgress(5 + r * 25, `Enviando… ${Math.round(r * 100)}%`),
+          extra
         );
         setStep("upload", "done");
         setStep("extract", "current");
@@ -75,7 +99,8 @@
         STEPS.forEach((s) => setStep(s, "done"));
         setProgress(100, "Pronto");
 
-        window.LeIA.onDocumentLoaded(result);
+        // Não abre o leitor: o livro vai para a estante (com loading do áudio).
+        window.LeIA.onBookAdded(up.job_id);
       } catch (err) {
         console.error(err);
         window.LeIA.toast("Falha: " + err.message, "danger");

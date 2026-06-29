@@ -59,20 +59,25 @@
 
       sec.paragraphs.forEach((p, pIdx) => {
         const para = document.createElement("p");
-        const sentences = splitSentences(p.text);
-        sentences.forEach((sentText, siIdx) => {
-          const sid = `s${sIdx}_p${pIdx}_${siIdx}`;
+        // Usa as frases já divididas pelo backend (ids estáveis que casam com o
+        // cache de áudio pré-gerado); cai no split do cliente só se faltarem.
+        const sents =
+          p.sentences && p.sentences.length
+            ? p.sentences
+            : splitSentences(p.text).map((t, i) => ({ id: `s${sIdx}_p${pIdx}_${i}`, text: t }));
+        sents.forEach((sent, siIdx) => {
+          const sid = sent.id;
           const span = document.createElement("span");
           span.className = "sentence";
           span.dataset.sid = sid;
-          span.textContent = sentText + " ";
+          span.textContent = sent.text + " ";
           span.addEventListener("click", () => {
             const ev = new CustomEvent("leia:sentence-click", { detail: { sid } });
             window.dispatchEvent(ev);
           });
           para.appendChild(span);
           const s = {
-            id: sid, text: sentText, el: span,
+            id: sid, text: sent.text, el: span,
             sectionIndex: sIdx, paragraphIndex: pIdx, indexInParagraph: siIdx,
             globalIndex: state.sentences.length,
           };
