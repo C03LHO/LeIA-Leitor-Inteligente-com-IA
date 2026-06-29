@@ -41,9 +41,14 @@
   --t-slow: 280ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 0 0 1px rgba(245, 158, 11, 0.22), 0 10px 32px rgba(245, 158, 11, 0.16);
+
   --reader-fontsize: 19px;
-  --topbar-h: 56px;
-  --player-h: 80px;
+  --topbar-h: 60px;
+  --player-h: 84px;
   --sidebar-w: 280px;
   --sidebar-w-collapsed: 56px;
 }
