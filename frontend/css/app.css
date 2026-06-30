@@ -177,11 +177,12 @@ a:hover { color: var(--accent-hover); }
   padding: var(--space-7) var(--space-7);
 }
 .reader {
-  max-width: 1000px;
+  max-width: var(--reader-maxwidth);
   margin: 0 auto;
-  font-family: var(--font-reader);
+  font-family: var(--reader-font);
+  font-weight: var(--reader-weight);
   font-size: var(--reader-fontsize);
-  line-height: 1.75;
+  line-height: var(--reader-lineheight);
   color: var(--fg-primary);
 }
 .reader h1 {
@@ -730,16 +731,58 @@ a:hover { color: var(--accent-hover); }
 /* ============================================================
    Font-size buttons / shortcuts table
    ============================================================ */
-.size-presets { display: flex; gap: var(--space-2); }
-.size-preset {
+.size-presets, .seg {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.size-preset, .seg-btn {
   padding: 6px 12px;
   border-radius: var(--radius-md);
   background: var(--bg-overlay);
   color: var(--fg-secondary);
   font-size: 13px;
   border: 1px solid transparent;
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
-.size-preset.active { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
+.size-preset:hover, .seg-btn:hover { color: var(--fg-primary); }
+.size-preset.active, .seg-btn.active { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
+
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 150px; height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-overlay);
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); cursor: pointer;
+}
+
+/* Sobreposições de leitura — luz quente e brilho (simulado) */
+#warm-overlay, #dim-overlay {
+  position: fixed; inset: 0;
+  pointer-events: none;
+}
+#warm-overlay {
+  background: #ff8a1e;
+  mix-blend-mode: multiply;
+  opacity: 0;
+  z-index: 9998;
+  transition: opacity var(--t-base) var(--ease);
+}
+#dim-overlay {
+  background: #000;
+  opacity: 0;
+  z-index: 9999;
+  transition: opacity var(--t-base) var(--ease);
+}
 
 .shortcut-row { display: flex; justify-content: space-between; padding: var(--space-2) 0; font-size: 13px; }
 .shortcut-keys { display: flex; gap: 4px; }

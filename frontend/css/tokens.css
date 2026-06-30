@@ -1,3 +1,16 @@
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/static/fonts/opendyslexic-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "OpenDyslexic";
+  src: url("/static/fonts/opendyslexic-700.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --bg-canvas:     #0e0e10;
   --bg-surface:    #161618;
@@ -53,6 +66,11 @@
   --shadow-glow: 0 0 0 1px rgba(245, 158, 11, 0.22), 0 10px 32px rgba(245, 158, 11, 0.16);
 
   --reader-fontsize: 19px;
+  --reader-font: var(--font-reader);
+  --reader-weight: 400;
+  --reader-lineheight: 1.75;
+  --reader-maxwidth: 1000px;
+
   --topbar-h: 60px;
   --player-h: 84px;
   --sidebar-w: 280px;

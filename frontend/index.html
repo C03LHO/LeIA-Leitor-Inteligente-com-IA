@@ -183,22 +183,67 @@
         <div class="modal-pane" data-pane="appearance">
           <div class="modal-section">
             <div class="modal-row">
-              <div>
-                <div class="modal-row-label">Tamanho do texto</div>
-                <div class="modal-row-hint">Aplica-se à área de leitura.</div>
-              </div>
-              <div class="size-presets" id="size-presets">
-                <button class="size-preset" data-size="17">A−</button>
-                <button class="size-preset active" data-size="19">A</button>
-                <button class="size-preset" data-size="22">A+</button>
+              <div class="modal-row-label">Tamanho do texto</div>
+              <div class="seg" id="size-presets">
+                <button class="seg-btn" data-size="17">A−</button>
+                <button class="seg-btn active" data-size="19">A</button>
+                <button class="seg-btn" data-size="22">A+</button>
+                <button class="seg-btn" data-size="26">A++</button>
               </div>
             </div>
+            <div class="modal-row">
+              <div class="modal-row-label">Fonte</div>
+              <div class="seg" id="font-presets">
+                <button class="seg-btn active" data-font="serif">Serifada</button>
+                <button class="seg-btn" data-font="sans">Sem serifa</button>
+                <button class="seg-btn" data-font="dyslexic" title="OpenDyslexic — facilita a leitura para dislexia">Dislexia</button>
+              </div>
+            </div>
+            <div class="modal-row">
+              <div class="modal-row-label">Espessura</div>
+              <div class="seg" id="weight-presets">
+                <button class="seg-btn active" data-weight="400">Normal</button>
+                <button class="seg-btn" data-weight="700">Negrito</button>
+              </div>
+            </div>
+            <div class="modal-row">
+              <div class="modal-row-label">Espaçamento</div>
+              <div class="seg" id="spacing-presets">
+                <button class="seg-btn" data-lh="1.45">Compacto</button>
+                <button class="seg-btn active" data-lh="1.75">Normal</button>
+                <button class="seg-btn" data-lh="2.1">Amplo</button>
+              </div>
+            </div>
+            <div class="modal-row">
+              <div class="modal-row-label">Margens</div>
+              <div class="seg" id="margin-presets">
+                <button class="seg-btn" data-mw="1200">Estreitas</button>
+                <button class="seg-btn active" data-mw="1000">Médias</button>
+                <button class="seg-btn" data-mw="760">Largas</button>
+              </div>
+            </div>
+          </div>
+          <div class="modal-section">
             <div class="modal-row">
               <div>
                 <div class="modal-row-label">Tema claro</div>
                 <div class="modal-row-hint">Fundo claro, para leitura de dia.</div>
               </div>
               <div class="switch" id="toggle-theme"></div>
+            </div>
+            <div class="modal-row">
+              <div>
+                <div class="modal-row-label">Luz quente</div>
+                <div class="modal-row-hint">Tom mais quente — descansa a vista à noite.</div>
+              </div>
+              <input type="range" class="range" id="warm-slider" min="0" max="100" value="0" />
+            </div>
+            <div class="modal-row">
+              <div>
+                <div class="modal-row-label">Brilho</div>
+                <div class="modal-row-hint">Escurece a tela (simulado, não é o brilho do aparelho).</div>
+              </div>
+              <input type="range" class="range" id="bright-slider" min="20" max="100" value="100" />
             </div>
           </div>
         </div>
@@ -237,6 +282,9 @@
       </div>
     </div>
   </div>
+
+  <div id="warm-overlay"></div>
+  <div id="dim-overlay"></div>
 
   <div id="toast-stack" class="toast-stack"></div>
 

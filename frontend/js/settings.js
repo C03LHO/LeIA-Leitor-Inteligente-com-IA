@@ -1,18 +1,89 @@
 (function () {
-  const SIZE_KEY = "leia.reader.size";
   const AUTOPLAY_KEY = "leia.autoplay";
   const CFG_KEY = "leia.cleaning";
 
-  function loadPrefs() {
-    try {
-      const size = parseInt(localStorage.getItem(SIZE_KEY) || "19", 10);
-      window.LeIA.reader.setReaderFontSize(size);
-      document.querySelectorAll(".size-preset").forEach((b) => {
-        b.classList.toggle("active", parseInt(b.dataset.size, 10) === size);
+  const FONT_STACKS = {
+    serif: "var(--font-reader)",
+    sans: "var(--font-ui)",
+    dyslexic: "'OpenDyslexic', var(--font-ui)",
+  };
+
+  function setVar(name, val) { document.documentElement.style.setProperty(name, val); }
+
+  // ---- aplicadores de aparência ----
+  function applyFont(key) { setVar("--reader-font", FONT_STACKS[key] || FONT_STACKS.serif); }
+  function applyWeight(w) { setVar("--reader-weight", w || "400"); }
+  function applyLineHeight(lh) { setVar("--reader-lineheight", lh || "1.75"); }
+  function applyMargin(mw) { setVar("--reader-maxwidth", (mw || "1000") + "px"); }
+  function applyWarm(v) {
+    const o = document.getElementById("warm-overlay");
+    if (o) o.style.opacity = String(((parseInt(v, 10) || 0) / 100) * 0.4);
+  }
+  function applyBright(v) {
+    const o = document.getElementById("dim-overlay");
+    const b = parseInt(v, 10);
+    if (o && !isNaN(b)) o.style.opacity = String(((100 - b) / 100) * 0.7);
+  }
+
+  // ---- controles genéricos ----
+  function bindSeg(id, dataKey, apply, storeKey) {
+    const cont = document.getElementById(id);
+    if (!cont) return;
+    cont.querySelectorAll(".seg-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        cont.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", b === btn));
+        apply(btn.dataset[dataKey]);
+        try { localStorage.setItem(storeKey, btn.dataset[dataKey]); } catch {}
       });
+    });
+  }
+  function setSegActive(id, dataKey, val) {
+    const cont = document.getElementById(id);
+    if (!cont || val == null) return;
+    cont.querySelectorAll(".seg-btn").forEach((b) =>
+      b.classList.toggle("active", b.dataset[dataKey] === String(val))
+    );
+  }
+  function bindSlider(id, apply, storeKey) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      apply(el.value);
+      try { localStorage.setItem(storeKey, el.value); } catch {}
+    });
+  }
+
+  // Aplica tudo que está salvo (chamado na carga, antes de abrir o modal).
+  function applyAppearance() {
+    try {
+      const size = parseInt(localStorage.getItem("leia.reader.size") || "19", 10);
+      window.LeIA.reader.setReaderFontSize(size);
+      setSegActive("size-presets", "size", size);
+
+      const font = localStorage.getItem("leia.font") || "serif";
+      applyFont(font); setSegActive("font-presets", "font", font);
+
+      const weight = localStorage.getItem("leia.weight") || "400";
+      applyWeight(weight); setSegActive("weight-presets", "weight", weight);
+
+      const lh = localStorage.getItem("leia.lh") || "1.75";
+      applyLineHeight(lh); setSegActive("spacing-presets", "lh", lh);
+
+      const mw = localStorage.getItem("leia.mw") || "1000";
+      applyMargin(mw); setSegActive("margin-presets", "mw", mw);
+
+      const warm = localStorage.getItem("leia.warm") || "0";
+      applyWarm(warm);
+      const ws = document.getElementById("warm-slider"); if (ws) ws.value = warm;
+
+      const bright = localStorage.getItem("leia.bright") || "100";
+      applyBright(bright);
+      const bs = document.getElementById("bright-slider"); if (bs) bs.value = bright;
+
       const autoplay = localStorage.getItem(AUTOPLAY_KEY) === "1";
-      const sw = document.getElementById("toggle-autoplay");
-      if (sw) sw.classList.toggle("on", autoplay);
+      const ap = document.getElementById("toggle-autoplay");
+      if (ap) ap.classList.toggle("on", autoplay);
+
       const th = document.getElementById("toggle-theme");
       if (th) th.classList.toggle("on", localStorage.getItem("leia.theme") === "light");
     } catch {}
@@ -56,16 +127,16 @@
       t.addEventListener("click", () => switchTab(t.dataset.tab));
     });
 
-    document.querySelectorAll(".size-preset").forEach((b) => {
-      b.addEventListener("click", () => {
-        const size = parseInt(b.dataset.size, 10);
-        window.LeIA.reader.setReaderFontSize(size);
-        document.querySelectorAll(".size-preset").forEach((x) =>
-          x.classList.toggle("active", x === b)
-        );
-      });
-    });
+    // Aparência
+    bindSeg("size-presets", "size", (v) => window.LeIA.reader.setReaderFontSize(parseInt(v, 10)), "leia.reader.size");
+    bindSeg("font-presets", "font", applyFont, "leia.font");
+    bindSeg("weight-presets", "weight", applyWeight, "leia.weight");
+    bindSeg("spacing-presets", "lh", applyLineHeight, "leia.lh");
+    bindSeg("margin-presets", "mw", applyMargin, "leia.mw");
+    bindSlider("warm-slider", applyWarm, "leia.warm");
+    bindSlider("bright-slider", applyBright, "leia.bright");
 
+    // Limpeza
     document.querySelectorAll(".switch[data-cfg]").forEach((sw) => {
       const key = `${CFG_KEY}.${sw.dataset.cfg}`;
       const stored = localStorage.getItem(key);
@@ -76,6 +147,7 @@
       });
     });
 
+    // Leitura
     const ap = document.getElementById("toggle-autoplay");
     if (ap) {
       ap.addEventListener("click", () => {
@@ -84,6 +156,7 @@
       });
     }
 
+    // Tema
     const th = document.getElementById("toggle-theme");
     if (th) {
       th.addEventListener("click", () => {
@@ -95,7 +168,7 @@
     }
 
     window.LeIA.shortcuts.on("Escape", close);
-    loadPrefs();
+    applyAppearance();
   }
 
   window.LeIA = window.LeIA || {};
