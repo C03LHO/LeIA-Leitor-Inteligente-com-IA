@@ -13,6 +13,8 @@
       const autoplay = localStorage.getItem(AUTOPLAY_KEY) === "1";
       const sw = document.getElementById("toggle-autoplay");
       if (sw) sw.classList.toggle("on", autoplay);
+      const th = document.getElementById("toggle-theme");
+      if (th) th.classList.toggle("on", localStorage.getItem("leia.theme") === "light");
     } catch {}
   }
 
@@ -79,6 +81,16 @@
       ap.addEventListener("click", () => {
         ap.classList.toggle("on");
         try { localStorage.setItem(AUTOPLAY_KEY, ap.classList.contains("on") ? "1" : "0"); } catch {}
+      });
+    }
+
+    const th = document.getElementById("toggle-theme");
+    if (th) {
+      th.addEventListener("click", () => {
+        const light = !th.classList.contains("on");
+        th.classList.toggle("on", light);
+        document.documentElement.setAttribute("data-theme", light ? "light" : "dark");
+        try { localStorage.setItem("leia.theme", light ? "light" : "dark"); } catch {}
       });
     }
 

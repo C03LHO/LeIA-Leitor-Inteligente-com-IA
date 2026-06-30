@@ -9,8 +9,8 @@ html, body {
   padding: 0;
   height: 100%;
   background:
-    radial-gradient(1100px 560px at 50% -8%, rgba(245, 158, 11, 0.07), transparent 60%),
-    radial-gradient(900px 600px at 100% 110%, rgba(59, 130, 246, 0.05), transparent 55%),
+    radial-gradient(1100px 560px at 50% -8%, var(--canvas-glow-1), transparent 60%),
+    radial-gradient(900px 600px at 100% 110%, var(--canvas-glow-2), transparent 55%),
     var(--bg-canvas);
   background-attachment: fixed;
   color: var(--fg-primary);
@@ -52,7 +52,7 @@ a:hover { color: var(--accent-hover); }
   align-items: center;
   justify-content: space-between;
   padding: 0 var(--space-5);
-  background: rgba(20, 20, 24, 0.7);
+  background: var(--bg-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-subtle);
@@ -214,7 +214,7 @@ a:hover { color: var(--accent-hover); }
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-.sentence:hover { background: rgba(255, 255, 255, 0.04); }
+.sentence:hover { background: var(--hover-bg); }
 .sentence.active {
   background: var(--accent-muted);
   color: var(--fg-primary);
@@ -307,7 +307,7 @@ a:hover { color: var(--accent-hover); }
 .progress-track {
   width: 100%; max-width: 480px;
   height: 6px;
-  background: var(--bg-elevated);
+  background: var(--bg-overlay);
   border-radius: var(--radius-pill);
   overflow: hidden;
   margin-bottom: var(--space-3);
@@ -386,8 +386,8 @@ a:hover { color: var(--accent-hover); }
   color: var(--fg-secondary);
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
-.btn-icon:hover { background: rgba(255, 255, 255, 0.06); color: var(--fg-primary); }
-.btn-icon:active { background: rgba(255, 255, 255, 0.1); }
+.btn-icon:hover { background: var(--hover-bg); color: var(--fg-primary); }
+.btn-icon:active { background: var(--hover-bg-strong); }
 .btn-icon-lg {
   width: 50px; height: 50px;
   padding: 0;
@@ -410,11 +410,11 @@ a:hover { color: var(--accent-hover); }
   align-items: center;
   gap: var(--space-4);
   padding: 0 var(--space-5);
-  background: rgba(20, 20, 24, 0.82);
+  background: var(--bg-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-default);
-  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.18);
   height: var(--player-h);
   z-index: 10;
 }
@@ -477,7 +477,7 @@ a:hover { color: var(--accent-hover); }
 .scrubber-track {
   width: 100%;
   height: 4px;
-  background: var(--bg-elevated);
+  background: var(--bg-overlay);
   border-radius: var(--radius-pill);
   position: relative;
   overflow: hidden;
@@ -884,5 +884,39 @@ kbd {
 /* Play travado enquanto a narração é preparada */
 .btn-icon-lg.locked { opacity: 0.4; cursor: not-allowed; }
 .btn-icon-lg.locked:hover { background: var(--accent); transform: none; }
+
+/* ============================================================
+   Polimento: transição de tema, animações de entrada, responsivo
+   ============================================================ */
+body { transition: background-color var(--t-base) var(--ease); }
+.topbar, .player-bar, .sidebar, .modal, .reader, .toast, .book-cover, .dropzone {
+  transition: background-color var(--t-base) var(--ease),
+              color var(--t-base) var(--ease),
+              border-color var(--t-base) var(--ease);
+}
+
+.book { animation: riseIn var(--t-slow) var(--ease) both; }
+.reader h1, .reader p { animation: fadeIn var(--t-slow) var(--ease) both; }
+@keyframes riseIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .book, .reader h1, .reader p, .modal { animation: none; }
+}
+
+/* Responsivo — telas estreitas (tablet / celular) */
+@media (max-width: 760px) {
+  .body-grid { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .reader-scroll { padding: var(--space-5) var(--space-4); }
+  .reader { font-size: 17px; }
+  .doc-title { max-width: 130px; }
+  .now-reading { display: none; }
+  .player-stat { display: none; }
+  .player-bar { gap: var(--space-2); padding: 0 var(--space-3); }
+  .btn-icon { width: 34px; height: 34px; }
+  .library-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--space-4); }
+  .welcome-title { font-size: 30px; }
+}
 
 .hidden { display: none !important; }

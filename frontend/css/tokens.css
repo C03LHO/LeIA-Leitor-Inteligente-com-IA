@@ -3,6 +3,12 @@
   --bg-surface:    #161618;
   --bg-elevated:   #1f1f23;
   --bg-overlay:    #2a2a2f;
+  --bg-glass:      rgba(20, 20, 24, 0.72);
+
+  --hover-bg:        rgba(255, 255, 255, 0.06);
+  --hover-bg-strong: rgba(255, 255, 255, 0.10);
+  --canvas-glow-1:   rgba(245, 158, 11, 0.07);
+  --canvas-glow-2:   rgba(59, 130, 246, 0.05);
 
   --fg-primary:    #ececec;
   --fg-secondary:  #a8a8b3;
@@ -51,4 +57,39 @@
   --player-h: 84px;
   --sidebar-w: 280px;
   --sidebar-w-collapsed: 56px;
+}
+
+/* ============================================================
+   Tema claro (dia)
+   ============================================================ */
+:root[data-theme="light"] {
+  --bg-canvas:     #f4f3f1;
+  --bg-surface:    #ffffff;
+  --bg-elevated:   #ffffff;
+  --bg-overlay:    #ebeae8;
+  --bg-glass:      rgba(255, 255, 255, 0.8);
+
+  --fg-primary:    #1c1c20;
+  --fg-secondary:  #55555f;
+  --fg-tertiary:   #88888f;
+  --fg-disabled:   #b8b8be;
+
+  --accent:        #d97e00;
+  --accent-hover:  #f59e0b;
+  --accent-muted:  rgba(217, 126, 0, 0.13);
+  --accent-glow:   rgba(217, 126, 0, 0.28);
+
+  --border-subtle:  rgba(0, 0, 0, 0.07);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-strong:  rgba(0, 0, 0, 0.2);
+
+  --hover-bg:        rgba(0, 0, 0, 0.05);
+  --hover-bg-strong: rgba(0, 0, 0, 0.09);
+  --canvas-glow-1:   rgba(245, 158, 11, 0.1);
+  --canvas-glow-2:   rgba(59, 130, 246, 0.05);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.16);
+  --shadow-glow: 0 0 0 1px rgba(217, 126, 0, 0.22), 0 10px 30px rgba(217, 126, 0, 0.18);
 }
