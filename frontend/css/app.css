@@ -443,18 +443,22 @@ a:hover { color: var(--accent-hover); }
   font-size: 12px;
   color: var(--fg-secondary);
   font-weight: 600;
-  min-width: 44px;
+  min-width: 0;
   text-align: right;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 .player-stat {
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--fg-tertiary);
-  min-width: 120px;
+  min-width: 0;
+  max-width: 280px;
   text-align: left;
-  flex-shrink: 0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
 }
 .now-reading {
   font-size: 12px;
@@ -986,6 +990,26 @@ kbd {
 .bm-text { font-size: 12px; color: var(--fg-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bm-del { width: 22px; height: 22px; border-radius: 50%; background: transparent; border: none; color: var(--fg-tertiary); }
 .bm-del:hover { color: var(--danger); }
+
+/* ============================================================
+   Estatísticas (Fase C)
+   ============================================================ */
+.stats-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); margin-bottom: var(--space-5); }
+.stat-card {
+  background: var(--bg-surface); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: var(--space-4); text-align: center;
+}
+.stat-num { font-size: 22px; font-weight: 700; color: var(--fg-primary); }
+.stat-lbl { font-size: 11px; color: var(--fg-tertiary); margin-top: 2px; }
+.goal-track {
+  height: 8px; border-radius: var(--radius-pill); background: var(--bg-overlay);
+  overflow: hidden; margin: var(--space-2) 0 var(--space-5);
+}
+.goal-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-hover)); border-radius: var(--radius-pill); transition: width var(--t-slow) var(--ease); }
+.stats-chart { display: flex; align-items: flex-end; gap: var(--space-2); height: 90px; }
+.stat-bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.stat-bar-fill { width: 70%; min-height: 3px; background: var(--accent-muted); border: 1px solid var(--accent); border-radius: var(--radius-sm); transition: height var(--t-slow) var(--ease); }
+.stat-bar span { font-size: 10px; color: var(--fg-tertiary); }
 
 /* Play travado enquanto a narração é preparada */
 .btn-icon-lg.locked { opacity: 0.4; cursor: not-allowed; }

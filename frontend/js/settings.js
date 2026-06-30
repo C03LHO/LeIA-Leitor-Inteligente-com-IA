@@ -89,8 +89,42 @@
     } catch {}
   }
 
-  function open() { document.getElementById("settings-backdrop").classList.add("open"); refreshSystemInfo(); }
+  function open() {
+    document.getElementById("settings-backdrop").classList.add("open");
+    refreshSystemInfo();
+    renderStats();
+  }
   function close() { document.getElementById("settings-backdrop").classList.remove("open"); }
+
+  function fmtMin(sec) {
+    const m = Math.round(sec / 60);
+    if (m < 60) return m + " min";
+    const h = Math.floor(m / 60), mm = m % 60;
+    return mm ? `${h} h ${mm} min` : `${h} h`;
+  }
+  function renderStats() {
+    const wrap = document.getElementById("stats-info");
+    if (!wrap || !window.LeIA.stats) return;
+    const s = window.LeIA.stats.summary();
+    const goalSec = s.goalMin * 60;
+    const todayPct = goalSec ? Math.min(100, Math.round((s.todaySec / goalSec) * 100)) : 0;
+    const maxBar = Math.max(60, ...s.last7.map((d) => d.sec));
+    const bars = s.last7.map((d) =>
+      `<div class="stat-bar" title="${fmtMin(d.sec)}"><div class="stat-bar-fill" style="height:${Math.round((d.sec / maxBar) * 100)}%"></div><span>${d.label}</span></div>`
+    ).join("");
+    wrap.innerHTML = `
+      <div class="stats-cards">
+        <div class="stat-card"><div class="stat-num">🔥 ${s.streak}</div><div class="stat-lbl">dias seguidos</div></div>
+        <div class="stat-card"><div class="stat-num">${fmtMin(s.total)}</div><div class="stat-lbl">tempo total</div></div>
+        <div class="stat-card"><div class="stat-num">${s.daysActive}</div><div class="stat-lbl">dias de leitura</div></div>
+      </div>
+      <div class="modal-row"><div class="modal-row-label">Hoje</div><div>${fmtMin(s.todaySec)} / ${s.goalMin} min · ${todayPct}%</div></div>
+      <div class="goal-track"><div class="goal-fill" style="width:${todayPct}%"></div></div>
+      <div class="stats-chart">${bars}</div>
+    `;
+    const gp = document.getElementById("goal-presets");
+    if (gp) gp.querySelectorAll(".seg-btn").forEach((b) => b.classList.toggle("active", parseInt(b.dataset.goal, 10) === s.goalMin));
+  }
 
   function switchTab(name) {
     document.querySelectorAll(".modal-tab").forEach((t) =>
@@ -135,6 +169,13 @@
     bindSeg("margin-presets", "mw", applyMargin, "leia.mw");
     bindSlider("warm-slider", applyWarm, "leia.warm");
     bindSlider("bright-slider", applyBright, "leia.bright");
+
+    // Estatísticas: meta diária
+    const gp = document.getElementById("goal-presets");
+    if (gp) gp.querySelectorAll(".seg-btn").forEach((b) => b.addEventListener("click", () => {
+      if (window.LeIA.stats) window.LeIA.stats.setGoalMin(parseInt(b.dataset.goal, 10));
+      renderStats();
+    }));
 
     // Limpeza
     document.querySelectorAll(".switch[data-cfg]").forEach((sw) => {

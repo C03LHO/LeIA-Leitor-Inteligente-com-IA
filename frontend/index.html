@@ -192,6 +192,7 @@
       <div class="modal-tabs">
         <div class="modal-tab active" data-tab="appearance">Aparência</div>
         <div class="modal-tab" data-tab="reading">Leitura</div>
+        <div class="modal-tab" data-tab="stats">Estatísticas</div>
         <div class="modal-tab" data-tab="cleaning">Limpeza</div>
         <div class="modal-tab" data-tab="shortcuts">Atalhos</div>
         <div class="modal-tab" data-tab="system">Sistema</div>
@@ -273,6 +274,22 @@
             <div class="switch" id="toggle-autoplay"></div>
           </div>
         </div>
+        <div class="modal-pane hidden" data-pane="stats">
+          <div id="stats-info"></div>
+          <div class="modal-row">
+            <div>
+              <div class="modal-row-label">Meta diária</div>
+              <div class="modal-row-hint">Minutos de leitura por dia.</div>
+            </div>
+            <div class="seg" id="goal-presets">
+              <button class="seg-btn" data-goal="5">5</button>
+              <button class="seg-btn" data-goal="10">10</button>
+              <button class="seg-btn active" data-goal="15">15</button>
+              <button class="seg-btn" data-goal="30">30</button>
+              <button class="seg-btn" data-goal="60">60</button>
+            </div>
+          </div>
+        </div>
         <div class="modal-pane hidden" data-pane="cleaning">
           <div class="modal-row"><div class="modal-row-label">Remover URLs</div><div class="switch on" data-cfg="remove_urls"></div></div>
           <div class="modal-row"><div class="modal-row-label">Remover notas de rodapé</div><div class="switch on" data-cfg="remove_footnotes"></div></div>
@@ -310,6 +327,7 @@
   <script src="/static/js/pdf-upload.js"></script>
   <script src="/static/js/voices.js"></script>
   <script src="/static/js/reader.js"></script>
+  <script src="/static/js/stats.js"></script>
   <script src="/static/js/player.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/app.js"></script>

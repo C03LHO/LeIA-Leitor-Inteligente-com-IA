@@ -130,8 +130,18 @@
     let remChars = 0;
     for (let i = idx; i < total; i++) remChars += r.sentences[i].text.length + 1;
     const secsLeft = remChars / (CHARS_PER_SEC * (state.speed || 1));
-    time.textContent = `${Math.round((idx / total) * 100)}%`;
-    if (left) left.textContent = `${fmtDuration(secsLeft)} restantes`;
+    // Tempo restante do capítulo (seção atual).
+    const sec = currentSection();
+    let chapChars = 0;
+    if (sec) for (let i = idx; i < Math.min(sec.sentenceEnd, total); i++) chapChars += r.sentences[i].text.length + 1;
+    const chapLeft = chapChars / (CHARS_PER_SEC * (state.speed || 1));
+    // % do livro + localização (frase atual / total).
+    time.textContent = `${Math.round((idx / total) * 100)}% · ${idx + 1}/${total}`;
+    if (left) {
+      left.textContent = sec
+        ? `${fmtDuration(chapLeft)} no cap. · ${fmtDuration(secsLeft)} restantes`
+        : `${fmtDuration(secsLeft)} restantes`;
+    }
     updateBookmarkBtn();
   }
 
@@ -496,6 +506,13 @@
     document.getElementById("scrubber").addEventListener("click", onScrubberClick);
     document.getElementById("btn-bookmark").addEventListener("click", toggleBookmark);
     bindPopover(document.getElementById("btn-bookmarks"), document.getElementById("bookmarks-popover"));
+
+    // Contabiliza tempo de leitura (escuta) para as estatísticas.
+    setInterval(() => {
+      if (state.isPlaying && state.audio && !state.audio.paused && window.LeIA.stats) {
+        window.LeIA.stats.addSeconds(1);
+      }
+    }, 1000);
 
     // Speed popover
     const speedBtn = document.getElementById("btn-speed");
