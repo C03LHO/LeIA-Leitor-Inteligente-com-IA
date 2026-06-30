@@ -6,8 +6,13 @@ from pathlib import Path
 from backend.config import CACHE_DIR
 
 
+# Versão da síntese: muda quando os parâmetros/pós-processamento mudam, para
+# invalidar áudio antigo (com artefatos) sem precisar limpar manualmente.
+_SYNTH_VERSION = "v2"
+
+
 def audio_cache_path(text: str, voice: str, speed: float) -> Path:
-    key = f"{voice}|{speed:.3f}|{text}".encode("utf-8")
+    key = f"{_SYNTH_VERSION}|{voice}|{speed:.3f}|{text}".encode("utf-8")
     digest = hashlib.sha1(key).hexdigest()
     audio_dir = CACHE_DIR / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)

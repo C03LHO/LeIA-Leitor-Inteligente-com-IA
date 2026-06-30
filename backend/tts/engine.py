@@ -18,6 +18,15 @@ logger = get_logger("tts.engine")
 SAMPLE_RATE = 24000
 LANGUAGE_ID = "pt"
 
+# Parâmetros de geração afinados para narração estável (menos suspiros/ruídos
+# alucinados que os defaults 0.8/0.5): temperatura e expressividade mais baixas.
+GEN_KWARGS = {
+    "temperature": 0.7,
+    "exaggeration": 0.4,
+    "cfg_weight": 0.5,
+    "repetition_penalty": 2.0,
+}
+
 
 @dataclass
 class HardwareInfo:
@@ -106,15 +115,15 @@ class TTSEngine:
             return _silence_wav(0.18)
         with self._synth_lock:
             try:
-                wav = self._tts.generate(clean, language_id=LANGUAGE_ID)
+                wav = self._tts.generate(clean, language_id=LANGUAGE_ID, **GEN_KWARGS)
             except RuntimeError as exc:
                 if "CUDA" in str(exc):
                     logger.error("Erro CUDA na síntese; recarregando o modelo e tentando de novo")
                     self._reload_locked()
-                    wav = self._tts.generate(clean, language_id=LANGUAGE_ID)
+                    wav = self._tts.generate(clean, language_id=LANGUAGE_ID, **GEN_KWARGS)
                 else:
                     raise
-        return _wav_bytes_from_array(_to_mono_float(wav))
+        return _wav_bytes_from_array(_trim_audio(_to_mono_float(wav)))
 
     def _reload_locked(self) -> None:
         """Best-effort: recarrega o modelo após um erro CUDA (chamado sob _synth_lock)."""
@@ -150,6 +159,37 @@ def _to_mono_float(wav) -> np.ndarray:
     if arr.ndim > 1:
         arr = arr.reshape(-1) if 1 in arr.shape else arr.mean(axis=0)
     return arr
+
+
+def _trim_audio(arr: np.ndarray) -> np.ndarray:
+    """Apara silêncio/artefatos das pontas (energia por janelas de 20ms) e aplica
+    fades curtos. Remove o dead-air entre frases e suaviza respiros no fim."""
+    arr = np.asarray(arr, dtype=np.float32)
+    sr = SAMPLE_RATE
+    if arr.size < int(sr * 0.12):
+        return arr
+    win = max(1, int(sr * 0.02))
+    n = arr.size // win
+    if n < 3:
+        return arr
+    frames = arr[: n * win].reshape(n, win)
+    rms = np.sqrt(np.mean(frames * frames, axis=1) + 1e-9)
+    peak = float(rms.max())
+    if peak <= 1e-4:
+        return arr
+    thr = max(peak * 0.08, 0.006)
+    voiced = np.where(rms > thr)[0]
+    if voiced.size == 0:
+        return arr
+    start = max(0, int(voiced[0] * win - sr * 0.03))     # 30ms antes da fala
+    end = min(arr.size, int((voiced[-1] + 1) * win + sr * 0.06))  # 60ms depois
+    out = arr[start:end].copy()
+    f = min(int(sr * 0.006), out.size // 2)               # fade de ~6ms nas pontas
+    if f > 0:
+        ramp = np.linspace(0.0, 1.0, f, dtype=np.float32)
+        out[:f] *= ramp
+        out[-f:] *= ramp[::-1]
+    return out
 
 
 def _wav_bytes_from_array(samples) -> bytes:
