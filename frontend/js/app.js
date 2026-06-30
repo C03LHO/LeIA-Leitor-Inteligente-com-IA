@@ -21,6 +21,16 @@
     })[c]);
   }
 
+  // ~14 caracteres de fala por segundo (pt-BR, 1x) → estimativa do tempo de áudio.
+  function fmtDur(secs) {
+    secs = Math.max(0, Math.round(secs));
+    if (secs < 60) return "< 1 min";
+    const m = Math.round(secs / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60), mm = m % 60;
+    return mm ? `${h} h ${mm} min` : `${h} h`;
+  }
+
   async function refreshHardwareBadge() {
     const badge = document.getElementById("hw-badge");
     try {
@@ -100,10 +110,9 @@
       currentJobId = jobId;
       window.LeIA.reader.renderDocument(doc);
       const saved = parseInt(localStorage.getItem(`leia.progress.${jobId}`) || "-1", 10);
-      if (saved >= 0) {
-        window.LeIA.player.restorePosition(saved);
-        toast("📖 Retomando de onde você parou", "info");
-      }
+      // Posiciona no início (ou onde parou) já na abertura → mostra %/tempo restante na hora.
+      window.LeIA.player.restorePosition(saved > 0 ? saved : 0);
+      if (saved > 0) toast("📖 Retomando de onde você parou", "info");
       gatePlayUntilReady(jobId, audioReadyHint);
     } catch (e) {
       toast("Falha ao abrir: " + e.message, "danger");
@@ -140,6 +149,10 @@
     const pct = a.total ? Math.round((a.done / a.total) * 100) : 0;
     const savedIdx = parseInt(localStorage.getItem(`leia.progress.${it.job_id}`) || "-1", 10);
     const readPct = (savedIdx >= 0 && a.total) ? Math.min(100, Math.round((savedIdx / a.total) * 100)) : 0;
+    const durStr = it.chars ? "~" + fmtDur(it.chars / 14) + " de áudio" : "";
+    const statusLine = it.audio_ready
+      ? (readPct > 0 ? `${readPct}% lido` : "pronto para ouvir")
+      : `preparando áudio${a.total ? " · " + pct + "%" : "…"}`;
     const card = document.createElement("div");
     card.className = "book" + (it.audio_ready ? " is-ready" : " is-preparing");
     card.innerHTML = `
@@ -153,7 +166,8 @@
         ${readPct > 0 ? `<div class="book-progress"><div class="book-progress-fill" style="width:${readPct}%"></div></div>` : ""}
       </div>
       <div class="book-title" title="${escapeHTML(it.title || it.filename)}">${escapeHTML(it.title || it.filename)}</div>
-      <div class="book-meta">${it.pages || 0} págs · ${it.audio_ready ? "pronto para ouvir" : "preparando áudio…"}</div>
+      <div class="book-meta">${it.pages || 0} págs${durStr ? " · " + durStr : ""}</div>
+      <div class="book-sub">${statusLine}</div>
       <button class="book-del" title="Remover da estante">🗑</button>
     `;
     card.addEventListener("click", (e) => {

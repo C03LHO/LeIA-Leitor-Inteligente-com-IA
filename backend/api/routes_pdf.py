@@ -167,6 +167,7 @@ def _process_book(
             title=Path(filename).stem,
             ext=ext,
             pages=meta.get("pages", 0),
+            chars=meta.get("extracted_chars", 0),
             created_at=time.time(),
             audio_ready=False,
         )
@@ -213,6 +214,14 @@ def library():
     for jid, e in lib.items():
         if not pdf_result_path(jid).exists():
             continue
+        # backfill de 'chars' para livros antigos (estimativa de tempo na estante)
+        if not e.get("chars"):
+            try:
+                meta = json.loads(pdf_result_path(jid).read_text(encoding="utf-8")).get("metadata", {})
+                _library_put(jid, chars=meta.get("extracted_chars", 0))
+                e = _load_library().get(jid, e)
+            except Exception:
+                pass
         aj = _audio_jobs.get(jid)
         if aj:
             audio = {"status": aj.get("status"), "done": aj.get("done", 0), "total": aj.get("total", 0)}
@@ -226,6 +235,7 @@ def library():
                 "filename": e.get("filename", "PDF"),
                 "title": e.get("title") or e.get("filename", "PDF"),
                 "pages": e.get("pages", 0),
+                "chars": e.get("chars", 0),
                 "created_at": e.get("created_at"),
                 "audio_ready": bool(e.get("audio_ready")),
                 "audio": audio,

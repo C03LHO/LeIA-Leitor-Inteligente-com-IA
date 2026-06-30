@@ -70,6 +70,17 @@
     return `${m}:${ss}`;
   }
 
+  // ~14 caracteres de fala por segundo em pt-BR a 1x → estimativa do tempo restante.
+  const CHARS_PER_SEC = 14;
+  function fmtDuration(s) {
+    s = Math.max(0, Math.round(s));
+    if (s < 60) return "menos de 1 min";
+    const m = Math.round(s / 60);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60), mm = m % 60;
+    return mm ? `${h} h ${mm} min` : `${h} h`;
+  }
+
   function currentSentence() {
     const r = window.LeIA.reader.state;
     return r.sentenceById.get(state.currentSentenceId);
@@ -89,33 +100,38 @@
   function updateProgress() {
     const r = window.LeIA.reader.state;
     const s = currentSentence();
-    const sec = currentSection();
     const fill = document.getElementById("scrubber-fill");
     const buf = document.getElementById("scrubber-buffer");
     const thumb = document.getElementById("scrubber-thumb");
     const time = document.getElementById("player-time");
-    if (!s || !sec) {
+    const left = document.getElementById("time-left");
+    const total = r.sentences.length;
+    if (!s || !total) {
       fill.style.width = "0%";
       buf.style.width = "0%";
       thumb.style.left = "0%";
-      time.textContent = "0/0";
+      time.textContent = "0%";
+      if (left) left.textContent = "—";
       return;
     }
-    const len = Math.max(1, sec.sentenceEnd - sec.sentenceStart);
-    const pos = s.globalIndex - sec.sentenceStart;
-    const pct = (pos / len) * 100;
+    // Progresso ao nível do LIVRO (estilo Kindle), não só da seção.
+    const idx = s.globalIndex;
+    const pct = (idx / Math.max(1, total - 1)) * 100;
     fill.style.width = pct + "%";
     thumb.style.left = pct + "%";
-    // Buffer: contar sentenças bufferizadas adiante na seção atual
+    // Buffer pronto à frente (livro inteiro).
     let bufferedAhead = 0;
-    for (let i = s.globalIndex; i < sec.sentenceEnd; i++) {
-      const ss = r.sentences[i];
-      if (state.bufferedIds.has(ss.id)) bufferedAhead++;
+    for (let i = idx; i < total; i++) {
+      if (state.bufferedIds.has(r.sentences[i].id)) bufferedAhead++;
       else break;
     }
-    const bufPct = ((pos + bufferedAhead) / len) * 100;
-    buf.style.width = bufPct + "%";
-    time.textContent = `${pos + 1}/${len}`;
+    buf.style.width = (((idx + bufferedAhead) / total) * 100) + "%";
+    // Tempo restante estimado pelos caracteres de fala / velocidade.
+    let remChars = 0;
+    for (let i = idx; i < total; i++) remChars += r.sentences[i].text.length + 1;
+    const secsLeft = remChars / (CHARS_PER_SEC * (state.speed || 1));
+    time.textContent = `${Math.round((idx / total) * 100)}%`;
+    if (left) left.textContent = `${fmtDuration(secsLeft)} restantes`;
   }
 
   function stop({ keepHighlight = true } = {}) {
@@ -355,15 +371,13 @@
   }
 
   function onScrubberClick(e) {
-    const sec = currentSection();
     const r = window.LeIA.reader.state;
-    if (!sec) return;
+    if (!r.sentences.length) return;
     const track = e.currentTarget.querySelector(".scrubber-track");
     const rect = track.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const len = sec.sentenceEnd - sec.sentenceStart;
-    const idx = Math.min(len - 1, Math.floor(ratio * len));
-    jumpToSentence(r.sentences[sec.sentenceStart + idx].id);
+    const idx = Math.min(r.sentences.length - 1, Math.floor(ratio * r.sentences.length));
+    jumpToSentence(r.sentences[idx].id);
   }
 
   function bindPopover(button, popover) {
