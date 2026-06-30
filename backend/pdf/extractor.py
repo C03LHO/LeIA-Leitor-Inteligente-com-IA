@@ -112,6 +112,15 @@ def extract_blocks(pdf_path: str | Path) -> list[RawBlock]:
     return blocks
 
 
+def pdf_author(pdf_path: str | Path) -> str:
+    """Autor a partir dos metadados do PDF (pode vir vazio)."""
+    try:
+        with fitz.open(pdf_path) as doc:
+            return ((doc.metadata or {}).get("author") or "").strip()
+    except Exception:
+        return ""
+
+
 def render_cover(pdf_path: str | Path, out_path: str | Path, width: int = 420) -> bool:
     """Renderiza a 1ª página do PDF como PNG (capa do livro na estante)."""
     with fitz.open(pdf_path) as doc:

@@ -132,6 +132,7 @@
     const secsLeft = remChars / (CHARS_PER_SEC * (state.speed || 1));
     time.textContent = `${Math.round((idx / total) * 100)}%`;
     if (left) left.textContent = `${fmtDuration(secsLeft)} restantes`;
+    updateBookmarkBtn();
   }
 
   function stop({ keepHighlight = true } = {}) {
@@ -380,6 +381,84 @@
     jumpToSentence(r.sentences[idx].id);
   }
 
+  // ---------- Marcadores (bookmarks) ----------
+  function escHTML(s) {
+    return String(s || "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+  function bmKey() { return "leia.bm." + (window.LeIA.currentJobId || "x"); }
+  function getBookmarks() {
+    try { return JSON.parse(localStorage.getItem(bmKey()) || "[]"); } catch { return []; }
+  }
+  function setBookmarks(arr) {
+    try { localStorage.setItem(bmKey(), JSON.stringify(arr)); } catch {}
+  }
+  function jumpToSentenceIdx(idx) {
+    const r = window.LeIA.reader.state;
+    if (idx < 0 || idx >= r.sentences.length) return;
+    jumpToSentence(r.sentences[idx].id);
+  }
+  function toggleBookmark() {
+    const cur = currentSentence();
+    if (!cur) { window.LeIA.toast("Abra um livro primeiro", "warning"); return; }
+    const bm = getBookmarks();
+    const i = bm.findIndex((b) => b.idx === cur.globalIndex);
+    if (i >= 0) { bm.splice(i, 1); window.LeIA.toast("Marcador removido", "info"); }
+    else { bm.push({ idx: cur.globalIndex, text: cur.text.slice(0, 90) }); bm.sort((a, b) => a.idx - b.idx); window.LeIA.toast("📑 Posição marcada", "success"); }
+    setBookmarks(bm);
+    renderBookmarks();
+  }
+  function renderBookmarks() {
+    const r = window.LeIA.reader.state;
+    const total = r.sentences.length || 1;
+    const scrubber = document.getElementById("scrubber");
+    if (scrubber) {
+      scrubber.querySelectorAll(".bm-tick").forEach((t) => t.remove());
+      getBookmarks().forEach((b) => {
+        const tick = document.createElement("div");
+        tick.className = "bm-tick";
+        tick.style.left = ((b.idx / total) * 100) + "%";
+        tick.title = b.text;
+        tick.addEventListener("click", (e) => { e.stopPropagation(); jumpToSentenceIdx(b.idx); });
+        scrubber.appendChild(tick);
+      });
+    }
+    updateBookmarkBtn();
+    renderBookmarkList();
+  }
+  function updateBookmarkBtn() {
+    const cur = currentSentence();
+    const btn = document.getElementById("btn-bookmark");
+    if (btn) btn.classList.toggle("active", !!(cur && getBookmarks().some((b) => b.idx === cur.globalIndex)));
+  }
+  function renderBookmarkList() {
+    const wrap = document.getElementById("bookmarks-list");
+    if (!wrap) return;
+    const bm = getBookmarks();
+    if (!bm.length) { wrap.innerHTML = `<div class="bm-empty">Nenhum marcador ainda.</div>`; return; }
+    const total = window.LeIA.reader.state.sentences.length || 1;
+    wrap.innerHTML = "";
+    bm.forEach((b) => {
+      const item = document.createElement("div");
+      item.className = "bm-item";
+      item.innerHTML = `<div class="bm-pct">${Math.round((b.idx / total) * 100)}%</div>` +
+        `<div class="bm-text">${escHTML(b.text)}</div>` +
+        `<button class="bm-del" title="Remover">✕</button>`;
+      item.addEventListener("click", (e) => {
+        if (e.target.closest(".bm-del")) return;
+        jumpToSentenceIdx(b.idx);
+        document.getElementById("bookmarks-popover").classList.remove("open");
+      });
+      item.querySelector(".bm-del").addEventListener("click", (e) => {
+        e.stopPropagation();
+        setBookmarks(getBookmarks().filter((x) => x.idx !== b.idx));
+        renderBookmarks();
+      });
+      wrap.appendChild(item);
+    });
+  }
+
   function bindPopover(button, popover) {
     function close() { popover.classList.remove("open"); }
     function open() {
@@ -415,6 +494,8 @@
     document.getElementById("btn-next-section").addEventListener("click", () => moveSection(+1));
     document.getElementById("btn-download").addEventListener("click", downloadSection);
     document.getElementById("scrubber").addEventListener("click", onScrubberClick);
+    document.getElementById("btn-bookmark").addEventListener("click", toggleBookmark);
+    bindPopover(document.getElementById("btn-bookmarks"), document.getElementById("bookmarks-popover"));
 
     // Speed popover
     const speedBtn = document.getElementById("btn-speed");
@@ -449,6 +530,8 @@
     sc.on("ArrowDown", () => bumpVolume(-0.05));
     sc.on("m", toggleMute);
     sc.on("M", toggleMute);
+    sc.on("b", toggleBookmark);
+    sc.on("B", toggleBookmark);
     sc.on("+", () => bumpSpeed(+1));
     sc.on("=", () => bumpSpeed(+1));
     sc.on("-", () => bumpSpeed(-1));
@@ -457,6 +540,7 @@
   window.LeIA = window.LeIA || {};
   window.LeIA.player = {
     initPlayer, stop, toggle, jumpToSentence, moveSentence, moveSection,
-    setSpeed, setVoice, setVolume, toggleMute, setReady, restorePosition, currentIndex, state,
+    setSpeed, setVoice, setVolume, toggleMute, setReady, restorePosition, currentIndex,
+    renderBookmarks, state,
   };
 })();

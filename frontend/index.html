@@ -66,8 +66,14 @@
         <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
 
         <div id="library" class="library hidden">
-          <div class="library-header">Seus livros</div>
+          <div class="library-top">
+            <div class="library-header">Seus livros</div>
+            <input id="library-search" class="library-search" type="search"
+                   placeholder="Buscar por título, autor ou trecho…" autocomplete="off" />
+          </div>
+          <div id="collection-chips" class="collection-chips"></div>
           <div id="library-list" class="library-grid"></div>
+          <div id="library-empty" class="library-empty hidden">Nenhum resultado.</div>
         </div>
       </div>
     </section>
@@ -129,6 +135,12 @@
       <div class="player-controls">
         <button id="btn-voice" class="btn btn-outline hidden" title="Voz">🎙 <span id="voice-label">Padrão</span></button>
         <button id="btn-speed" class="btn btn-outline" title="Velocidade (− / +)"><span id="speed-label">1.0x</span></button>
+        <button id="btn-bookmark" class="btn-icon" title="Marcar esta posição (B)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z"/></svg>
+        </button>
+        <button id="btn-bookmarks" class="btn-icon" title="Ver marcadores">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+        </button>
         <button id="btn-volume" class="btn-icon" title="Volume (↑ ↓ M)">
           <svg id="icon-volume" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
         </button>
@@ -152,6 +164,11 @@
   <div id="volume-popover" class="popover volume-popover" style="bottom: calc(var(--player-h) + 8px);">
     <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100" />
     <span class="volume-value" id="volume-value">100</span>
+  </div>
+
+  <div id="bookmarks-popover" class="popover bookmarks-panel" style="bottom: calc(var(--player-h) + 8px);">
+    <div class="voices-panel-header"><span>Marcadores</span></div>
+    <div id="bookmarks-list"></div>
   </div>
 
   <div id="voices-popover" class="popover voices-panel" style="bottom: calc(var(--player-h) + 8px);">

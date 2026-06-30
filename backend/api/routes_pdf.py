@@ -9,11 +9,12 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from backend.config import CACHE_DIR
 from backend.epub.extractor import build_epub_document, extract_epub_cover
 from backend.pdf.cleaner import CleaningConfig
-from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, render_cover
+from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author, render_cover
 from backend.pdf.reflow import build_document
 from backend.tts.streamer import get_or_synthesize
 from backend.tts.voices import DEFAULT_VOICE_ID
@@ -150,6 +151,7 @@ def _process_book(
             blocks = extract_blocks(src_path)
             _jobs[job_id]["progress"] = 0.6
             result = build_document(blocks, str(src_path), filename, cfg)
+            result["metadata"]["author"] = pdf_author(src_path)
             result["raw_blocks_sample"] = blocks_as_jsonable(blocks[:20])
         result_path = pdf_result_path(job_id)
         result_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
@@ -165,6 +167,7 @@ def _process_book(
             job_id,
             filename=filename,
             title=Path(filename).stem,
+            author=meta.get("author", ""),
             ext=ext,
             pages=meta.get("pages", 0),
             chars=meta.get("extracted_chars", 0),
@@ -214,11 +217,11 @@ def library():
     for jid, e in lib.items():
         if not pdf_result_path(jid).exists():
             continue
-        # backfill de 'chars' para livros antigos (estimativa de tempo na estante)
-        if not e.get("chars"):
+        # backfill de 'chars'/'author' para livros antigos
+        if not e.get("chars") or e.get("author") is None:
             try:
                 meta = json.loads(pdf_result_path(jid).read_text(encoding="utf-8")).get("metadata", {})
-                _library_put(jid, chars=meta.get("extracted_chars", 0))
+                _library_put(jid, chars=meta.get("extracted_chars", 0), author=meta.get("author", ""))
                 e = _load_library().get(jid, e)
             except Exception:
                 pass
@@ -234,9 +237,12 @@ def library():
                 "job_id": jid,
                 "filename": e.get("filename", "PDF"),
                 "title": e.get("title") or e.get("filename", "PDF"),
+                "author": e.get("author", ""),
                 "pages": e.get("pages", 0),
                 "chars": e.get("chars", 0),
                 "created_at": e.get("created_at"),
+                "last_opened": e.get("last_opened"),
+                "collection": e.get("collection", ""),
                 "audio_ready": bool(e.get("audio_ready")),
                 "audio": audio,
             }
@@ -311,7 +317,60 @@ def job_result(job_id: str):
     path = pdf_result_path(job_id)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Resultado não encontrado")
+    if _load_library().get(job_id):
+        _library_put(job_id, last_opened=time.time())  # histórico de leitura
     return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
+
+
+class CollectionBody(BaseModel):
+    collection: str = ""
+
+
+@router.post("/{job_id}/collection")
+def set_collection(job_id: str, body: CollectionBody):
+    if job_id not in _load_library():
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    _library_put(job_id, collection=body.collection.strip())
+    return {"ok": True, "collection": body.collection.strip()}
+
+
+@router.get("/search")
+def search(q: str = ""):
+    ql = (q or "").strip().lower()
+    if len(ql) < 2:
+        return {"results": []}
+    lib = _load_library()
+    results = []
+    for jid, e in lib.items():
+        if not pdf_result_path(jid).exists():
+            continue
+        in_title = ql in (e.get("title") or "").lower()
+        in_author = ql in (e.get("author") or "").lower()
+        snippet = None
+        try:
+            data = json.loads(pdf_result_path(jid).read_text(encoding="utf-8"))
+            for sec in data.get("sections", []):
+                for p in sec.get("paragraphs", []):
+                    t = p.get("text", "")
+                    i = t.lower().find(ql)
+                    if i >= 0:
+                        a = max(0, i - 40)
+                        snippet = ("…" if a > 0 else "") + t[a:i + len(ql) + 60].strip() + "…"
+                        break
+                if snippet:
+                    break
+        except Exception:
+            pass
+        if in_title or in_author or snippet:
+            results.append({
+                "job_id": jid,
+                "title": e.get("title"),
+                "author": e.get("author", ""),
+                "in_title": in_title,
+                "in_author": in_author,
+                "snippet": snippet,
+            })
+    return {"results": results}
 
 
 @router.delete("/{job_id}")

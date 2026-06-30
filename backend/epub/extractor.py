@@ -10,6 +10,7 @@ from xml.etree import ElementTree as ET
 
 OPF_NS = "http://www.idpf.org/2007/opf"
 CONTAINER_NS = "urn:oasis:names:tc:opendocument:xmlns:container"
+DC_NS = "http://purl.org/dc/elements/1.1/"
 
 BLOCK_TAGS = {"p", "h1", "h2", "h3", "h4", "li", "blockquote"}
 HEADING_TAGS = {"h1", "h2", "h3"}
@@ -76,8 +77,10 @@ def _parse_opf(zf: zipfile.ZipFile):
     for meta in opf.iter(f"{{{OPF_NS}}}meta"):
         if meta.get("name") == "cover":
             cover_meta_id = meta.get("content")
+    creator = opf.find(f".//{{{DC_NS}}}creator")
+    author = (creator.text or "").strip() if creator is not None and creator.text else ""
     base = posixpath.dirname(opf_path)
-    return manifest, spine, base, cover_meta_id
+    return manifest, spine, base, cover_meta_id, author
 
 
 def build_epub_document(epub_path: str | Path, filename: str) -> dict:
@@ -89,7 +92,7 @@ def build_epub_document(epub_path: str | Path, filename: str) -> dict:
         raise ValueError("Não foi possível abrir o EPUB — pode estar corrompido.") from exc
 
     with zf:
-        manifest, spine, base, _ = _parse_opf(zf)
+        manifest, spine, base, _, author = _parse_opf(zf)
 
         sections: list[dict] = [{"id": "sec_0", "level": 1, "title": "", "paragraphs": []}]
         current = sections[0]
@@ -137,6 +140,7 @@ def build_epub_document(epub_path: str | Path, filename: str) -> dict:
     return {
         "metadata": {
             "filename": filename,
+            "author": author,
             "pages": len(spine),
             "extracted_chars": extracted,
             "removed_chars": 0,
@@ -153,7 +157,7 @@ def extract_epub_cover(epub_path: str | Path, out_path: str | Path, width: int =
     except Exception:
         return False
     with zf:
-        manifest, _, base, cover_meta_id = _parse_opf(zf)
+        manifest, _, base, cover_meta_id, _ = _parse_opf(zf)
         href = None
         # 1) item com properties="cover-image"
         for item in manifest.values():
