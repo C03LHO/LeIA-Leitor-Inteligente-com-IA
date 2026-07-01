@@ -1011,6 +1011,35 @@ kbd {
 .stat-bar-fill { width: 70%; min-height: 3px; background: var(--accent-muted); border: 1px solid var(--accent); border-radius: var(--radius-sm); transition: height var(--t-slow) var(--ease); }
 .stat-bar span { font-size: 10px; color: var(--fg-tertiary); }
 
+/* ============================================================
+   Fila de narração + preparo sob demanda
+   ============================================================ */
+#btn-queue { position: relative; }
+.queue-badge {
+  position: absolute; top: 2px; right: 2px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  background: var(--accent); color: var(--bg-canvas);
+  border-radius: var(--radius-pill); font-size: 9px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+.queue-panel { position: fixed; width: 320px; max-height: 380px; overflow-y: auto; padding: var(--space-2); z-index: 300; }
+.queue-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
+.queue-icon { width: 26px; display: grid; place-items: center; }
+.queue-icon .spinner { width: 18px; height: 18px; border-width: 2px; }
+.queue-meta { min-width: 0; flex: 1; }
+.queue-title { font-size: 13px; color: var(--fg-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.queue-status { font-size: 11px; color: var(--accent); }
+
+.book-badge.queued { background: var(--bg-overlay); color: var(--fg-secondary); }
+.book.is-none .book-sub { color: var(--fg-tertiary); }
+.book-prepare:hover { color: var(--accent); }
+
+.prepare-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: var(--space-4); font-size: 13px; color: var(--fg-secondary); cursor: pointer;
+}
+.prepare-toggle input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+
 /* Play travado enquanto a narração é preparada */
 .btn-icon-lg.locked { opacity: 0.4; cursor: not-allowed; }
 .btn-icon-lg.locked:hover { background: var(--accent); transform: none; }

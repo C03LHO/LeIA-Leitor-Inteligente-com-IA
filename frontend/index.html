@@ -30,6 +30,10 @@
         <span id="prep-status" class="prep-status hidden"></span>
       </div>
       <div class="topbar-right">
+        <button id="btn-queue" class="btn-icon hidden" title="Fila de narração" aria-label="Fila de narração">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h12"/><circle cx="19" cy="18" r="2" fill="currentColor" stroke="none"/></svg>
+          <span id="queue-badge" class="queue-badge hidden">0</span>
+        </button>
         <button id="btn-settings" class="btn-icon" title="Configurações" aria-label="Configurações">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
@@ -66,6 +70,7 @@
           <div class="dropzone-sub">ou clique para procurar</div>
           <input type="file" id="file-input" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden />
         </div>
+        <label class="prepare-toggle"><input type="checkbox" id="prepare-on-add" /> Já preparar a narração ao adicionar</label>
         <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
 
         <div id="library" class="library hidden">
@@ -167,6 +172,11 @@
   <div id="volume-popover" class="popover volume-popover" style="bottom: calc(var(--player-h) + 8px);">
     <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100" />
     <span class="volume-value" id="volume-value">100</span>
+  </div>
+
+  <div id="queue-popover" class="popover queue-panel">
+    <div class="voices-panel-header"><span>Fila de narração</span></div>
+    <div id="queue-list"></div>
   </div>
 
   <div id="bookmarks-popover" class="popover bookmarks-panel" style="bottom: calc(var(--player-h) + 8px);">

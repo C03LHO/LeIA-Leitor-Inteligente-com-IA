@@ -2,6 +2,7 @@
   let currentJobId = null;
   let audioPoll = null;   // poll do leitor aberto (gate de play)
   let shelfPoll = null;   // poll da estante (atualiza % das capas)
+  let queuePoll = null;   // poll da fila de narração
 
   let allItems = [];
   let activeCollection = "";
@@ -14,10 +15,7 @@
     el.className = `toast ${variant}`;
     el.textContent = message;
     stack.appendChild(el);
-    setTimeout(() => {
-      el.style.opacity = "0";
-      setTimeout(() => el.remove(), 200);
-    }, 4500);
+    setTimeout(() => { el.style.opacity = "0"; setTimeout(() => el.remove(), 200); }, 4500);
   }
 
   function escapeHTML(s) {
@@ -26,7 +24,6 @@
     })[c]);
   }
 
-  // ~14 caracteres de fala por segundo (pt-BR, 1x) → estimativa do tempo de áudio.
   function fmtDur(secs) {
     secs = Math.max(0, Math.round(secs));
     if (secs < 60) return "< 1 min";
@@ -70,6 +67,7 @@
       return;
     }
     let unlocked = false;
+    let requested = false;
     window.LeIA.player.setReady(false);
     async function tick() {
       if (currentJobId !== jobId) return;
@@ -81,6 +79,19 @@
           window.LeIA.player.setReady(true);
           setPrep("✓ Narração pronta", "ready");
           setTimeout(() => { if (currentJobId === jobId) setPrep(null); }, 3500);
+          refreshQueue();
+          return;
+        }
+        if (s.status === "none") {
+          // Abriu um livro sem áudio → coloca na fila automaticamente (opt-in já foi no adicionar).
+          if (!requested) { requested = true; window.LeIA.api.postJSON(`/api/pdf/${jobId}/prepare`, {}).then(refreshQueue).catch(() => {}); }
+          setPrep("⏳ Preparando narração…", "preparing");
+          audioPoll = setTimeout(tick, 1500);
+          return;
+        }
+        if (s.status === "queued") {
+          setPrep(s.position ? `⏳ Na fila (${s.position}º) para a narração` : "⏳ Na fila para a narração", "preparing");
+          audioPoll = setTimeout(tick, 1500);
           return;
         }
         if (s.status === "error") {
@@ -93,12 +104,7 @@
           if (done >= pos + PLAY_BUFFER || (total && done >= total)) unlocked = true;
         }
         window.LeIA.player.setReady(unlocked);
-        setPrep(
-          unlocked
-            ? `▶ Pode ouvir · preparando o resto (${pct}%)`
-            : `⏳ Preparando o início… (${pct}%)`,
-          unlocked ? "ready" : "preparing"
-        );
+        setPrep(unlocked ? `▶ Pode ouvir · preparando o resto (${pct}%)` : `⏳ Preparando o início… (${pct}%)`, unlocked ? "ready" : "preparing");
         audioPoll = setTimeout(tick, 1500);
       } catch { audioPoll = setTimeout(tick, 3000); }
     }
@@ -110,7 +116,7 @@
     try {
       const doc = await window.LeIA.api.getJSON(`/api/pdf/${jobId}/result`);
       currentJobId = jobId;
-      window.LeIA.currentJobId = jobId; // para os marcadores
+      window.LeIA.currentJobId = jobId;
       window.LeIA.reader.renderDocument(doc);
       const saved = parseInt(localStorage.getItem(`leia.progress.${jobId}`) || "-1", 10);
       window.LeIA.player.restorePosition(saved > 0 ? saved : 0);
@@ -122,13 +128,13 @@
     }
   }
 
-  // chamado pelo upload: livro novo entra na estante (não abre o leitor)
   function onBookAdded(jobId) {
     currentJobId = null;
     window.LeIA.currentJobId = null;
     window.LeIA.reader.reset();
     refreshLibrary();
-    toast("📚 Livro adicionado à estante — preparando a narração.", "success");
+    refreshQueue();
+    toast("📚 Livro adicionado à estante.", "success");
   }
 
   function saveProgress(globalIndex) {
@@ -153,25 +159,43 @@
 
   function stopShelfPoll() { if (shelfPoll) { clearTimeout(shelfPoll); shelfPoll = null; } }
 
+  async function prepareBook(jobId) {
+    try {
+      await window.LeIA.api.postJSON(`/api/pdf/${jobId}/prepare`, {});
+      toast("🎧 Adicionado à fila de narração.", "success");
+      refreshLibrary();
+      refreshQueue();
+    } catch (e) { toast("Falha: " + e.message, "danger"); }
+  }
+
   function bookCard(it, snippet) {
     const a = it.audio || {};
     const pct = a.total ? Math.round((a.done / a.total) * 100) : 0;
     const savedIdx = parseInt(localStorage.getItem(`leia.progress.${it.job_id}`) || "-1", 10);
     const readPct = (savedIdx >= 0 && a.total) ? Math.min(100, Math.round((savedIdx / a.total) * 100)) : 0;
     const durStr = it.chars ? "~" + fmtDur(it.chars / 14) + " de áudio" : "";
-    const statusLine = it.audio_ready
-      ? (readPct > 0 ? `${readPct}% lido` : "pronto para ouvir")
-      : `preparando áudio${a.total ? " · " + pct + "%" : "…"}`;
+    const st = a.status || (it.audio_ready ? "done" : "none");
+    let statusLine = "", badge = "";
+    if (st === "done") {
+      statusLine = readPct > 0 ? `${readPct}% lido` : "pronto para ouvir";
+      badge = `<div class="book-badge">▶</div>`;
+    } else if (st === "preparing") {
+      statusLine = `preparando narração · ${pct}%`;
+      badge = `<div class="book-loading"><div class="spinner"></div><span>${pct}%</span></div>`;
+    } else if (st === "queued") {
+      statusLine = a.position ? `na fila · ${a.position}º` : "na fila";
+      badge = `<div class="book-badge queued">⏳</div>`;
+    } else {
+      statusLine = "áudio não preparado";
+    }
     const card = document.createElement("div");
-    card.className = "book" + (it.audio_ready ? " is-ready" : " is-preparing");
+    card.className = "book " + (st === "done" ? "is-ready" : st === "none" ? "is-none" : "is-preparing");
     card.innerHTML = `
       <div class="book-cover">
         <div class="book-cover-fallback">📖</div>
         <img class="book-cover-img" src="/api/pdf/${it.job_id}/cover" alt=""
              onload="this.classList.add('loaded')" onerror="this.remove()">
-        ${it.audio_ready
-          ? `<div class="book-badge">▶</div>`
-          : `<div class="book-loading"><div class="spinner"></div><span>${pct}%</span></div>`}
+        ${badge}
         ${readPct > 0 ? `<div class="book-progress"><div class="book-progress-fill" style="width:${readPct}%"></div></div>` : ""}
       </div>
       <div class="book-title" title="${escapeHTML(it.title || it.filename)}">${escapeHTML(it.title || it.filename)}</div>
@@ -180,6 +204,7 @@
       <div class="book-sub">${statusLine}</div>
       ${snippet ? `<div class="book-snippet">“${escapeHTML(snippet)}”</div>` : ""}
       <div class="book-actions">
+        ${st === "none" ? `<button class="book-act book-prepare" title="Preparar narração">🎧</button>` : ""}
         <button class="book-act book-collection" title="Mover para coleção">📁</button>
         <button class="book-act book-del" title="Remover da estante">🗑</button>
       </div>
@@ -197,10 +222,9 @@
         refreshLibrary();
       } catch (err) { toast("Falha ao remover: " + err.message, "danger"); }
     });
-    card.querySelector(".book-collection").addEventListener("click", (e) => {
-      e.stopPropagation();
-      moveToCollection(it);
-    });
+    card.querySelector(".book-collection").addEventListener("click", (e) => { e.stopPropagation(); moveToCollection(it); });
+    const prep = card.querySelector(".book-prepare");
+    if (prep) prep.addEventListener("click", (e) => { e.stopPropagation(); prepareBook(it.job_id); });
     return card;
   }
 
@@ -239,13 +263,9 @@
     if (!wrap) return;
     let list;
     if (searchResults !== null) {
-      list = searchResults
-        .map((r) => ({ item: allItems.find((x) => x.job_id === r.job_id), snippet: r.snippet }))
-        .filter((x) => x.item);
+      list = searchResults.map((r) => ({ item: allItems.find((x) => x.job_id === r.job_id), snippet: r.snippet })).filter((x) => x.item);
     } else {
-      list = allItems
-        .filter((x) => !activeCollection || x.collection === activeCollection)
-        .map((x) => ({ item: x, snippet: null }));
+      list = allItems.filter((x) => !activeCollection || x.collection === activeCollection).map((x) => ({ item: x, snippet: null }));
     }
     wrap.innerHTML = "";
     list.forEach(({ item, snippet }) => wrap.appendChild(bookCard(item, snippet)));
@@ -271,19 +291,51 @@
     stopShelfPoll();
     try {
       const r = await window.LeIA.api.getJSON("/api/pdf/library");
-      allItems = (r.items || []).sort(
-        (a, b) => (b.last_opened || b.created_at || 0) - (a.last_opened || a.created_at || 0)
-      );
+      allItems = (r.items || []).sort((a, b) => (b.last_opened || b.created_at || 0) - (a.last_opened || a.created_at || 0));
       const welcome = document.getElementById("view-welcome");
       if (welcome) welcome.classList.toggle("has-books", allItems.length > 0);
       if (!allItems.length) { lib.classList.add("hidden"); return; }
       lib.classList.remove("hidden");
       renderChips();
       applyFilter();
-      const anyPreparing = allItems.some((it) => !it.audio_ready);
+      const anyActive = allItems.some((it) => it.audio && (it.audio.status === "preparing" || it.audio.status === "queued"));
       const shelfVisible = !welcome.classList.contains("hidden");
-      if (anyPreparing && shelfVisible && searchResults === null) shelfPoll = setTimeout(refreshLibrary, 2000);
+      if (anyActive && shelfVisible && searchResults === null) shelfPoll = setTimeout(refreshLibrary, 2500);
     } catch { lib.classList.add("hidden"); }
+  }
+
+  // ---------- fila de narração ----------
+  async function refreshQueue() {
+    const btn = document.getElementById("btn-queue");
+    const badge = document.getElementById("queue-badge");
+    const list = document.getElementById("queue-list");
+    if (!btn) return;
+    try {
+      const q = await window.LeIA.api.getJSON("/api/pdf/queue");
+      const items = q.items || [];
+      if (items.length) {
+        btn.classList.remove("hidden");
+        if (badge) { badge.textContent = String(items.length); badge.classList.remove("hidden"); }
+      } else {
+        btn.classList.add("hidden");
+        if (badge) badge.classList.add("hidden");
+      }
+      if (list) {
+        list.innerHTML = items.length ? "" : `<div class="bm-empty">Nada na fila.</div>`;
+        items.forEach((it) => {
+          const pct = it.total ? Math.round((it.done / it.total) * 100) : 0;
+          const row = document.createElement("div");
+          row.className = "queue-item";
+          row.innerHTML = `<div class="queue-icon">${it.status === "preparing" ? `<div class="spinner"></div>` : "⏳"}</div>` +
+            `<div class="queue-meta"><div class="queue-title">${escapeHTML(it.title)}</div>` +
+            `<div class="queue-status">${it.status === "preparing" ? "preparando · " + pct + "%" : "na fila"}</div></div>`;
+          list.appendChild(row);
+        });
+      }
+      // continua atualizando enquanto houver atividade na fila
+      if (queuePoll) { clearTimeout(queuePoll); queuePoll = null; }
+      if (items.length) queuePoll = setTimeout(refreshQueue, 2000);
+    } catch {}
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -292,6 +344,7 @@
     window.LeIA.openDoc = openDoc;
     window.LeIA.goHome = goHome;
     window.LeIA.refreshLibrary = refreshLibrary;
+    window.LeIA.refreshQueue = refreshQueue;
     window.LeIA.saveProgress = saveProgress;
 
     window.LeIA.shortcuts.init();
@@ -306,7 +359,24 @@
     const si = document.getElementById("library-search");
     if (si) si.addEventListener("input", () => doSearch(si.value.trim()));
 
+    // popover da fila
+    const qbtn = document.getElementById("btn-queue");
+    const qpop = document.getElementById("queue-popover");
+    if (qbtn && qpop) {
+      qbtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = qpop.classList.toggle("open");
+        if (open) {
+          const rect = qbtn.getBoundingClientRect();
+          qpop.style.left = `${Math.max(8, rect.right - 320)}px`;
+          qpop.style.top = `${rect.bottom + 8}px`;
+        }
+      });
+      document.addEventListener("click", (e) => { if (!qpop.contains(e.target) && e.target !== qbtn) qpop.classList.remove("open"); });
+    }
+
     refreshHardwareBadge();
     refreshLibrary();
+    refreshQueue();
   });
 })();

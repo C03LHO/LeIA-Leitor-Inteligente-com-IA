@@ -52,6 +52,14 @@
     const fileInput = document.getElementById("file-input");
     if (!dz) return;
 
+    const prepEl = document.getElementById("prepare-on-add");
+    if (prepEl) {
+      prepEl.checked = localStorage.getItem("leia.prepareOnAdd") === "1";
+      prepEl.addEventListener("change", () => {
+        try { localStorage.setItem("leia.prepareOnAdd", prepEl.checked ? "1" : "0"); } catch {}
+      });
+    }
+
     async function handle(file) {
       const name = ((file && file.name) || "").toLowerCase();
       if (!file || !(name.endsWith(".pdf") || name.endsWith(".epub"))) {
@@ -63,9 +71,9 @@
         setStep("upload", "current");
         setProgress(5, "Enviando arquivo…");
         const cleaning = readCleaningConfig();
-        const extra = Object.keys(cleaning).length
-          ? { cleaning: JSON.stringify(cleaning) }
-          : {};
+        const prepareEl = document.getElementById("prepare-on-add");
+        const extra = { prepare: prepareEl && prepareEl.checked ? "true" : "false" };
+        if (Object.keys(cleaning).length) extra.cleaning = JSON.stringify(cleaning);
         const up = await window.LeIA.api.uploadFile(
           "/api/pdf/upload",
           file,

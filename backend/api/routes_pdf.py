@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import json
+import queue
+import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
@@ -26,9 +27,12 @@ SUPPORTED_EXTS = (".pdf", ".epub")
 logger = get_logger("api.pdf")
 router = APIRouter(prefix="/api/pdf", tags=["pdf"])
 
-_executor = ThreadPoolExecutor(max_workers=2)
 _jobs: dict[str, dict[str, Any]] = {}
 _audio_jobs: dict[str, dict[str, Any]] = {}
+# Fila de áudio serial (um livro por vez na GPU, estilo Steam).
+_audio_queue: "queue.Queue[str]" = queue.Queue()
+_queued: list[str] = []            # job_ids aguardando (para calcular a posição)
+_audio_active: str | None = None   # job preparando agora
 
 _LIBRARY_PATH = CACHE_DIR / "pdf" / "_library.json"
 
@@ -117,6 +121,50 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
     )
 
 
+def _audio_worker() -> None:
+    """Consome a fila de áudio um livro por vez (serial → GPU não sobrecarrega)."""
+    global _audio_active
+    while True:
+        job_id = _audio_queue.get()
+        try:
+            if job_id in _queued:
+                _queued.remove(job_id)
+            _audio_active = job_id
+            rp = pdf_result_path(job_id)
+            if rp.exists():
+                result = json.loads(rp.read_text(encoding="utf-8"))
+                _pregen_audio(job_id, _collect_sentences(result))
+        except Exception:
+            logger.exception("Erro na fila de áudio (job %s)", job_id)
+            _audio_jobs[job_id] = {"status": "error", "done": 0, "total": 0}
+        finally:
+            _audio_active = None
+            _audio_queue.task_done()
+
+
+threading.Thread(target=_audio_worker, daemon=True, name="leia-audio-queue").start()
+
+
+def _enqueue_audio(job_id: str) -> bool:
+    """Coloca um livro na fila de preparação de áudio (idempotente)."""
+    if not pdf_result_path(job_id).exists():
+        return False
+    if _audio_active == job_id:
+        return True
+    aj = _audio_jobs.get(job_id)
+    if aj and aj.get("status") in ("queued", "preparing"):
+        return True
+    total = 0
+    try:
+        total = len(_collect_sentences(json.loads(pdf_result_path(job_id).read_text(encoding="utf-8"))))
+    except Exception:
+        pass
+    _audio_jobs[job_id] = {"status": "queued", "done": 0, "total": total}
+    _queued.append(job_id)
+    _audio_queue.put(job_id)
+    return True
+
+
 def _source_path(job_id: str) -> Path | None:
     ext = _load_library().get(job_id, {}).get("ext")
     if ext:
@@ -141,7 +189,12 @@ def _make_cover(src_path: Path, ext: str, job_id: str) -> None:
 
 
 def _process_book(
-    job_id: str, src_path: Path, filename: str, ext: str, cfg: CleaningConfig | None = None
+    job_id: str,
+    src_path: Path,
+    filename: str,
+    ext: str,
+    cfg: CleaningConfig | None = None,
+    prepare: bool = False,
 ) -> None:
     try:
         _jobs[job_id] = {"status": "processing", "progress": 0.1, "filename": filename}
@@ -174,9 +227,10 @@ def _process_book(
             created_at=time.time(),
             audio_ready=False,
         )
-        # Aquece o cache de áudio em background para a leitura ser instantânea.
-        _executor.submit(_pregen_audio, job_id, _collect_sentences(result))
-        logger.info("Book job %s done (%s)", job_id, filename)
+        # Só prepara o áudio se o usuário pediu (opt-in). Vai para a fila serial.
+        if prepare:
+            _enqueue_audio(job_id)
+        logger.info("Book job %s done (%s, prepare=%s)", job_id, filename, prepare)
     except Exception as exc:
         logger.exception("Book job %s failed", job_id)
         _jobs[job_id] = {
@@ -192,6 +246,7 @@ async def upload_pdf(
     file: UploadFile,
     background: BackgroundTasks,
     cleaning: str | None = Form(default=None),
+    prepare: bool = Form(default=False),
 ):
     ext = Path(file.filename or "").suffix.lower()
     if ext not in SUPPORTED_EXTS:
@@ -206,7 +261,7 @@ async def upload_pdf(
 
     cfg = _cleaning_config_from_json(cleaning)
     _jobs[job_id] = {"status": "queued", "progress": 0.0, "filename": file.filename}
-    background.add_task(_process_book, job_id, target, file.filename, ext, cfg)
+    background.add_task(_process_book, job_id, target, file.filename, ext, cfg, prepare)
     return {"job_id": job_id, "filename": file.filename, "size_bytes": len(data)}
 
 
@@ -231,7 +286,7 @@ def library():
         elif e.get("audio_ready"):
             audio = {"status": "done", "done": 1, "total": 1}
         else:
-            audio = {"status": "unknown", "done": 0, "total": 0}
+            audio = {"status": "none", "done": 0, "total": 0}  # não preparado
         items.append(
             {
                 "job_id": jid,
@@ -281,35 +336,50 @@ def job_status(job_id: str):
     raise HTTPException(status_code=404, detail="Job não encontrado")
 
 
-def _ensure_pregen(job_id: str) -> bool:
-    """Garante a pré-geração rodando (retoma após o backend reiniciar). Idempotente:
-    frases já cacheadas são puladas. Retorna True se está preparando ou pronta."""
-    aj = _audio_jobs.get(job_id)
-    if aj and aj.get("status") in ("preparing", "done"):
-        return True
-    if _load_library().get(job_id, {}).get("audio_ready"):
-        return True
-    path = pdf_result_path(job_id)
-    if not path.exists():
-        return False
-    try:
-        result = json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    _executor.submit(_pregen_audio, job_id, _collect_sentences(result))
-    return True
-
-
 @router.get("/{job_id}/audio-status")
 def audio_status(job_id: str):
     j = _audio_jobs.get(job_id)
     if j:
-        return j
+        out = dict(j)
+        if j.get("status") == "queued" and job_id in _queued:
+            out["position"] = _queued.index(job_id) + 1
+        return out
     if _load_library().get(job_id, {}).get("audio_ready"):
         return {"status": "done", "done": 1, "total": 1}
-    if _ensure_pregen(job_id):
-        return _audio_jobs.get(job_id) or {"status": "preparing", "done": 0, "total": 0}
-    return {"status": "unknown", "done": 0, "total": 0}
+    return {"status": "none", "done": 0, "total": 0}  # áudio ainda não preparado
+
+
+@router.post("/{job_id}/prepare")
+def prepare_audio(job_id: str):
+    if job_id not in _load_library() and not pdf_result_path(job_id).exists():
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    if not _enqueue_audio(job_id):
+        raise HTTPException(status_code=400, detail="Não foi possível preparar o áudio")
+    pos = (_queued.index(job_id) + 1) if job_id in _queued else 0
+    return {"ok": True, "status": _audio_jobs.get(job_id, {}).get("status", "queued"), "position": pos}
+
+
+@router.get("/queue")
+def audio_queue_state():
+    lib = _load_library()
+
+    def entry(jid: str, status: str) -> dict:
+        aj = _audio_jobs.get(jid, {})
+        e = lib.get(jid, {})
+        return {
+            "job_id": jid,
+            "title": e.get("title") or e.get("filename", "PDF"),
+            "status": status,
+            "done": aj.get("done", 0),
+            "total": aj.get("total", 0),
+        }
+
+    items = []
+    if _audio_active:
+        items.append(entry(_audio_active, "preparing"))
+    for jid in list(_queued):
+        items.append(entry(jid, "queued"))
+    return {"active": _audio_active, "count": len(items), "items": items}
 
 
 @router.get("/{job_id}/result")
