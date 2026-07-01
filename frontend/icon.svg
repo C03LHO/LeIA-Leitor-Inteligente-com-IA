@@ -1,0 +1,24 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.3" cy="0.18" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" rx="118" fill="url(#bg)"/>
+  <rect x="0" y="0" width="512" height="512" rx="118" fill="url(#shine)"/>
+
+  <!-- L -->
+  <path d="M150 146 h66 v176 h104 v66 H150 Z" fill="#1a1408" stroke-linejoin="round"/>
+
+  <!-- ondas de som (narração) -->
+  <g fill="none" stroke="#1a1408" stroke-width="23" stroke-linecap="round">
+    <path d="M315 178 A65 65 0 0 1 315 308" opacity="0.92"/>
+    <path d="M316 150 A90 90 0 0 1 316 336" opacity="0.6"/>
+  </g>
+</svg>
