@@ -146,6 +146,8 @@
   function goHome() {
     stopAudioPoll();
     setPrep(null);
+    const ex = document.getElementById("view-explore");
+    if (ex) ex.classList.add("hidden");
     currentJobId = null;
     window.LeIA.currentJobId = null;
     searchResults = null;
@@ -196,6 +198,7 @@
         <img class="book-cover-img" src="/api/pdf/${it.job_id}/cover" alt=""
              onload="this.classList.add('loaded')" onerror="this.remove()">
         ${badge}
+        ${it.source_warning ? `<div class="book-source-warn" title="${escapeHTML(it.source_warning)}">⚠</div>` : ""}
         ${readPct > 0 ? `<div class="book-progress"><div class="book-progress-fill" style="width:${readPct}%"></div></div>` : ""}
       </div>
       <div class="book-title" title="${escapeHTML(it.title || it.filename)}">${escapeHTML(it.title || it.filename)}</div>

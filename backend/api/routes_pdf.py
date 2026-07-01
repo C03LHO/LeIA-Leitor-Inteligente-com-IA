@@ -298,6 +298,8 @@ def library():
                 "created_at": e.get("created_at"),
                 "last_opened": e.get("last_opened"),
                 "collection": e.get("collection", ""),
+                "source": e.get("source", ""),
+                "source_warning": e.get("source_warning", ""),
                 "audio_ready": bool(e.get("audio_ready")),
                 "audio": audio,
             }

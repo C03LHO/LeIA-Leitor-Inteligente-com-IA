@@ -5,6 +5,7 @@ fastapi
 uvicorn[standard]
 python-multipart
 websockets
+httpx  # buscar/baixar livros grátis (Gutenberg, Wikisource, Internet Archive)
 
 # PDF
 PyMuPDF==1.24.1

@@ -9,13 +9,14 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.api import routes_pdf, routes_system, routes_tts, routes_voices
+from backend.api import routes_books, routes_pdf, routes_system, routes_tts, routes_voices
 from backend.config import APP_NAME, APP_VERSION, FRONTEND_DIR, HOST, PORT_RANGE
 from backend.utils.logging import setup_logging
 
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
 app.include_router(routes_system.router)
 app.include_router(routes_pdf.router)
+app.include_router(routes_books.router)
 app.include_router(routes_tts.router)
 app.include_router(routes_voices.router)
 

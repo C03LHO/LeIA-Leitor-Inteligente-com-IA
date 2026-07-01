@@ -1078,4 +1078,119 @@ body { transition: background-color var(--t-base) var(--ease); }
   .welcome-title { font-size: 30px; }
 }
 
+/* ============================================================
+   Buscar livros grátis (Gutenberg / Wikisource / Internet Archive)
+   ============================================================ */
+.explore-cta {
+  display: inline-flex; align-items: center; gap: var(--space-3);
+  margin-top: var(--space-5); padding: var(--space-3) var(--space-5);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg); color: var(--fg-primary); cursor: pointer; text-align: left;
+  transition: border-color var(--t-fast) var(--ease), transform var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+}
+.explore-cta:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-glow); }
+.explore-cta-globe { font-size: 22px; }
+.explore-cta span span, .explore-cta > span { display: flex; flex-direction: column; }
+.explore-cta b { font-size: 14px; font-weight: 600; }
+.explore-cta small { font-size: 11px; color: var(--fg-tertiary); margin-top: 1px; }
+
+.explore { max-width: 980px; margin: 0 auto; padding: var(--space-6) var(--space-5) var(--space-9); }
+.explore-head { position: relative; margin-bottom: var(--space-5); }
+.explore-back { position: absolute; left: 0; top: 2px; }
+.explore-title { font-size: 28px; font-weight: 700; text-align: center; }
+.explore-sub { text-align: center; color: var(--fg-secondary); font-size: 14px; margin-top: var(--space-2); }
+
+.explore-bar { display: flex; gap: var(--space-3); margin-bottom: var(--space-4); }
+.explore-input {
+  flex: 1; height: 46px; padding: 0 var(--space-4);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); color: var(--fg-primary); font-family: var(--font-ui); font-size: 15px;
+}
+.explore-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-muted); }
+.explore-go { height: 46px; padding: 0 var(--space-5); }
+
+.explore-controls {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+  flex-wrap: wrap; margin-bottom: var(--space-4);
+}
+.explore-sources { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.src-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 14px; border-radius: var(--radius-pill);
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  color: var(--fg-secondary); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: all var(--t-fast) var(--ease);
+}
+.src-chip:hover { color: var(--fg-primary); border-color: var(--border-strong); }
+.src-chip .src-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1px solid var(--border-strong); background: transparent;
+}
+.src-chip.active { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
+.src-chip.active .src-dot { background: var(--accent); border-color: var(--accent); }
+.explore-prep { margin-top: 0; }
+
+.explore-status { color: var(--fg-secondary); font-size: 13px; min-height: 18px; margin-bottom: var(--space-4); }
+.explore-status .ex-warn { color: var(--danger); }
+.ex-spin {
+  display: inline-block; width: 13px; height: 13px; vertical-align: -2px;
+  border: 2px solid var(--border-default); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+
+.explore-results { display: flex; flex-direction: column; gap: var(--space-3); }
+.ex-card {
+  display: flex; gap: var(--space-4); padding: var(--space-4);
+  background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+  transition: border-color var(--t-fast) var(--ease);
+}
+.ex-card:hover { border-color: var(--border-default); }
+.ex-cover {
+  position: relative; flex: 0 0 64px; width: 64px; height: 90px;
+  border-radius: var(--radius-sm); overflow: hidden; background: var(--bg-elevated);
+  display: grid; place-items: center;
+}
+.ex-cover-fallback { font-size: 26px; opacity: 0.4; }
+.ex-cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity var(--t-base) var(--ease); }
+.ex-cover-img.loaded { opacity: 1; }
+.ex-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.ex-title { font-size: 15px; font-weight: 600; color: var(--fg-primary); }
+.ex-author { font-size: 12px; color: var(--fg-secondary); }
+.ex-picker { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.ex-picker-label { font-size: 11px; color: var(--fg-tertiary); text-transform: uppercase; letter-spacing: 0.4px; }
+.ex-src {
+  padding: 3px 11px; border-radius: var(--radius-pill); font-size: 12px; cursor: pointer;
+  background: var(--bg-elevated); border: 1px solid var(--border-default); color: var(--fg-secondary);
+  transition: all var(--t-fast) var(--ease);
+}
+.ex-src:hover { color: var(--fg-primary); border-color: var(--border-strong); }
+.ex-src.active { background: var(--accent-muted); color: var(--accent); border-color: var(--accent); }
+.ex-src.warn::after { content: " ⚠"; }
+.ex-src-single { font-size: 11px; color: var(--fg-tertiary); }
+.ex-warning {
+  font-size: 12px; line-height: 1.4; color: #d9a441;
+  background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: var(--radius-sm); padding: 6px 10px;
+}
+.ex-foot { margin-top: auto; padding-top: 4px; }
+.ex-add { min-width: 150px; }
+.ex-add.done { background: var(--success); color: #fff; cursor: default; }
+.ex-add.loading { opacity: 0.85; cursor: progress; }
+.ex-add .ex-spin { border-top-color: var(--bg-canvas); }
+
+/* Aviso da origem (Internet Archive) no cartão da estante */
+.book-source-warn {
+  position: absolute; top: 8px; left: 8px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(245, 158, 11, 0.92); color: #1c1206;
+  display: grid; place-items: center; font-size: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 760px) {
+  .ex-add { min-width: 0; width: 100%; }
+  .explore-bar { flex-direction: column; }
+  .explore-go { width: 100%; }
+}
+
 .hidden { display: none !important; }

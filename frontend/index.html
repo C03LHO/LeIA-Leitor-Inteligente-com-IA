@@ -34,6 +34,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h12"/><circle cx="19" cy="18" r="2" fill="currentColor" stroke="none"/></svg>
           <span id="queue-badge" class="queue-badge hidden">0</span>
         </button>
+        <button id="btn-explore" class="btn-icon" title="Buscar livros grátis online" aria-label="Buscar livros grátis online">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.7 2.6 15.3 0 18M12 3c-2.6 2.7-2.6 15.3 0 18"/></svg>
+        </button>
         <button id="btn-settings" class="btn-icon" title="Configurações" aria-label="Configurações">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="3"/>
@@ -72,6 +75,10 @@
         </div>
         <label class="prepare-toggle"><input type="checkbox" id="prepare-on-add" /> Já preparar a narração ao adicionar</label>
         <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
+        <button id="btn-explore-welcome" class="explore-cta">
+          <span class="explore-cta-globe">🌐</span>
+          <span><b>Buscar livros grátis online</b><small>Project Gutenberg · Wikisource · Internet Archive — em português</small></span>
+        </button>
 
         <div id="library" class="library hidden">
           <div class="library-top">
@@ -83,6 +90,28 @@
           <div id="library-list" class="library-grid"></div>
           <div id="library-empty" class="library-empty hidden">Nenhum resultado.</div>
         </div>
+      </div>
+    </section>
+
+    <!-- Explorar / buscar livros grátis online -->
+    <section id="view-explore" class="reader-scroll hidden">
+      <div class="explore">
+        <div class="explore-head">
+          <button id="explore-back" class="btn btn-ghost explore-back">← Estante</button>
+          <h1 class="explore-title">Buscar livros grátis</h1>
+          <p class="explore-sub">Obras de domínio público e livres, em português. Escolha a fonte e mande para a sua estante.</p>
+        </div>
+        <div class="explore-bar">
+          <input id="explore-input" class="explore-input" type="search"
+                 placeholder="Título ou autor…  (ex.: Machado de Assis, Dom Casmurro)" autocomplete="off" />
+          <button id="explore-go" class="btn btn-primary explore-go">Buscar</button>
+        </div>
+        <div class="explore-controls">
+          <div id="explore-sources" class="explore-sources"></div>
+          <label class="prepare-toggle explore-prep"><input type="checkbox" id="explore-prepare" /> Já preparar a narração ao adicionar</label>
+        </div>
+        <div id="explore-status" class="explore-status"></div>
+        <div id="explore-results" class="explore-results"></div>
       </div>
     </section>
 
@@ -341,6 +370,7 @@
   <script src="/static/js/voices.js"></script>
   <script src="/static/js/reader.js"></script>
   <script src="/static/js/stats.js"></script>
+  <script src="/static/js/books.js"></script>
   <script src="/static/js/player.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/app.js"></script>
