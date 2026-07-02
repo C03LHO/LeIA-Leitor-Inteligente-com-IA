@@ -20,17 +20,20 @@ WARNING = (
 _PREFERRED_EXT = (".epub", ".pdf")
 
 
-def search(query: str, limit: int = 20) -> list[SourceHit]:
-    """Busca textos em português no Internet Archive (com aviso obrigatório)."""
+def search(query: str, limit: int = 20, page: int = 1) -> list[SourceHit]:
+    """Busca textos em português no Internet Archive (com aviso obrigatório).
+    A query é envolvida em parênteses para funcionar com OR sem quebrar os
+    filtros de idioma/tipo."""
     hits: list[SourceHit] = []
     params = [
-        ("q", f"{query} AND language:(portuguese) AND mediatype:texts"),
+        ("q", f"({query}) AND language:(portuguese) AND mediatype:texts"),
         ("fl[]", "identifier"),
         ("fl[]", "title"),
         ("fl[]", "creator"),
         ("fl[]", "language"),
+        ("sort[]", "downloads desc"),
         ("rows", str(limit)),
-        ("page", "1"),
+        ("page", str(max(1, page))),
         ("output", "json"),
     ]
     try:
