@@ -99,11 +99,24 @@ def _run_window(port: int) -> None:
         height=820,
         min_size=(940, 640),
     )
+    # storage_path + private_mode=False → localStorage (progresso, marcadores,
+    # estatísticas, ajustes) PERSISTE entre sessões e sobrevive a fechamento
+    # brusco/queda de energia. Sem isso, o pywebview roda em modo privado e
+    # apaga tudo ao fechar.
+    from backend.config import USER_DATA_DIR
+    storage = str(USER_DATA_DIR / "webview")
     try:
-        webview.start(icon=str(icon) if icon.exists() else None)
+        webview.start(
+            icon=str(icon) if icon.exists() else None,
+            private_mode=False,
+            storage_path=storage,
+        )
     except TypeError:
-        # backends antigos não aceitam icon=
-        webview.start()
+        # backends/versões antigas: tenta ao menos persistir o storage
+        try:
+            webview.start(private_mode=False, storage_path=storage)
+        except TypeError:
+            webview.start()
     # Janela fechada → encerra o servidor e sai.
     server.should_exit = True
 

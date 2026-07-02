@@ -79,8 +79,9 @@
         <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
         <button id="btn-explore-welcome" class="explore-cta">
           <span class="explore-cta-globe">🌐</span>
-          <span><b>Buscar livros grátis online</b><small>Project Gutenberg · Wikisource · Internet Archive — em português</small></span>
+          <span><b>Descobrir livros grátis</b><small>Populares e por gênero · Gutenberg · Wikisource · Internet Archive</small></span>
         </button>
+        <div id="app-version" class="app-version" title="Versão do LeIA instalada">v—</div>
 
         <div id="library" class="library hidden">
           <div class="library-top">
@@ -95,25 +96,29 @@
       </div>
     </section>
 
-    <!-- Explorar / buscar livros grátis online -->
+    <!-- Descobrir / buscar livros grátis online -->
     <section id="view-explore" class="reader-scroll hidden">
       <div class="explore">
         <div class="explore-head">
           <button id="explore-back" class="btn btn-ghost explore-back">← Estante</button>
-          <h1 class="explore-title">Buscar livros grátis</h1>
-          <p class="explore-sub">Obras de domínio público e livres, em português. Escolha a fonte e mande para a sua estante.</p>
+          <h1 class="explore-title">Descobrir livros grátis</h1>
+          <p class="explore-sub">Populares e por gênero, em português — do domínio público direto pra sua estante.</p>
         </div>
         <div class="explore-bar">
           <input id="explore-input" class="explore-input" type="search"
-                 placeholder="Título ou autor…  (ex.: Machado de Assis, Dom Casmurro)" autocomplete="off" />
+                 placeholder="Buscar por título ou autor…  (ex.: Machado de Assis)" autocomplete="off" />
           <button id="explore-go" class="btn btn-primary explore-go">Buscar</button>
         </div>
+        <div id="explore-genres" class="explore-genres"></div>
         <div class="explore-controls">
           <div id="explore-sources" class="explore-sources"></div>
           <label class="prepare-toggle explore-prep"><input type="checkbox" id="explore-prepare" /> Já preparar a narração ao adicionar</label>
         </div>
         <div id="explore-status" class="explore-status"></div>
         <div id="explore-results" class="explore-results"></div>
+        <div class="explore-more-wrap">
+          <button id="explore-more" class="btn btn-outline hidden">Carregar mais</button>
+        </div>
       </div>
     </section>
 
@@ -355,6 +360,34 @@
           <div class="modal-row">
             <div class="modal-row-label">Cache de áudio</div>
             <button class="btn btn-outline" id="btn-clear-cache" disabled>Limpar cache</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detalhe do livro (descoberta) -->
+  <div id="book-modal-backdrop" class="backdrop">
+    <div class="modal book-modal">
+      <button id="book-modal-close" class="btn-icon book-modal-close" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+      </button>
+      <div class="book-modal-body">
+        <div class="bd-cover">
+          <div class="bd-cover-fallback">📖</div>
+          <img id="bd-cover-img" class="bd-cover-img" alt="" />
+        </div>
+        <div class="bd-info">
+          <div id="bd-title" class="bd-title"></div>
+          <div id="bd-author" class="bd-author"></div>
+          <div id="bd-meta" class="bd-meta"></div>
+          <div id="bd-subjects" class="bd-subjects"></div>
+          <div id="bd-source" class="bd-source"></div>
+          <div id="bd-warning" class="bd-warning"></div>
+          <div id="bd-summary" class="bd-summary"></div>
+          <div class="bd-actions">
+            <label class="prepare-toggle bd-prep"><input type="checkbox" id="bd-prepare" /> Já preparar a narração</label>
+            <button id="bd-add" class="btn btn-primary bd-add">Adicionar à estante</button>
           </div>
         </div>
       </div>

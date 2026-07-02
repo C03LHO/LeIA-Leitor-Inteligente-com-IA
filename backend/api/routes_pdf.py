@@ -300,6 +300,8 @@ def library():
                 "collection": e.get("collection", ""),
                 "source": e.get("source", ""),
                 "source_warning": e.get("source_warning", ""),
+                "progress": e.get("progress", -1),
+                "progress_total": e.get("progress_total", 0),
                 "audio_ready": bool(e.get("audio_ready")),
                 "audio": audio,
             }
@@ -392,6 +394,30 @@ def job_result(job_id: str):
     if _load_library().get(job_id):
         _library_put(job_id, last_opened=time.time())  # histórico de leitura
     return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
+
+
+class ProgressBody(BaseModel):
+    index: int = 0
+    total: int = 0
+
+
+@router.post("/{job_id}/progress")
+def save_progress(job_id: str, body: ProgressBody):
+    """Salva o ponto de leitura NO DISCO (sobrevive a fechamento brusco/queda
+    de energia — não depende só do localStorage do navegador)."""
+    if job_id not in _load_library():
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    fields = {"progress": max(0, int(body.index)), "last_opened": time.time()}
+    if body.total:
+        fields["progress_total"] = int(body.total)
+    _library_put(job_id, **fields)
+    return {"ok": True, "progress": fields["progress"]}
+
+
+@router.get("/{job_id}/progress")
+def get_progress(job_id: str):
+    e = _load_library().get(job_id, {})
+    return {"index": e.get("progress", -1), "total": e.get("progress_total", 0)}
 
 
 class CollectionBody(BaseModel):

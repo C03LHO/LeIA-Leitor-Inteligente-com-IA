@@ -54,10 +54,19 @@ def group_hits(hits: list[SourceHit]) -> list[dict]:
                 "author": h.author,
                 "cover_url": h.cover_url,
                 "warning": h.warning,
+                "subjects": list(h.subjects or []),
+                "downloads": int(h.downloads or 0),
+                "summary": h.summary or "",
                 "sources": [],
             }
             order.append(key)
         g = groups[key]
+        if h.subjects and not g["subjects"]:
+            g["subjects"] = list(h.subjects)
+        if h.downloads and h.downloads > g["downloads"]:
+            g["downloads"] = int(h.downloads)
+        if h.summary and len(h.summary) > len(g["summary"]):
+            g["summary"] = h.summary
         # Prefere um título/autor mais informativo e uma capa quando surgir.
         if len(h.title) > len(g["title"]):
             g["title"] = h.title

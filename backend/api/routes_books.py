@@ -11,7 +11,7 @@ from pydantic import BaseModel
 _DL_RETRIES = 3
 
 from backend.api import routes_pdf
-from backend.sources import SOURCES, group_hits, search_all
+from backend.sources import SOURCES, gutendex, group_hits, search_all
 from backend.sources.base import SOURCE_LABELS, USER_AGENT
 from backend.utils.logging import get_logger
 from backend.utils.paths import book_upload_path
@@ -32,6 +32,39 @@ def list_sources():
             {"id": s, "label": SOURCE_LABELS.get(s, s)} for s in _ALL_SOURCES
         ]
     }
+
+
+# Gêneros da vitrine → termo de assunto do Gutenberg (subjects em inglês).
+GENRES = [
+    {"id": "romance", "label": "Romance", "topic": "love stories"},
+    {"id": "aventura", "label": "Aventura", "topic": "adventure"},
+    {"id": "ficcao", "label": "Ficção", "topic": "fiction"},
+    {"id": "scifi", "label": "Ficção científica", "topic": "science fiction"},
+    {"id": "terror", "label": "Terror", "topic": "horror"},
+    {"id": "misterio", "label": "Mistério", "topic": "detective"},
+    {"id": "poesia", "label": "Poesia", "topic": "poetry"},
+    {"id": "contos", "label": "Contos", "topic": "short stories"},
+    {"id": "teatro", "label": "Teatro", "topic": "drama"},
+    {"id": "historia", "label": "História", "topic": "history"},
+    {"id": "filosofia", "label": "Filosofia", "topic": "philosophy"},
+    {"id": "infantil", "label": "Infantil", "topic": "children"},
+]
+_GENRE_TOPIC = {g["id"]: g["topic"] for g in GENRES}
+
+
+@router.get("/genres")
+def list_genres():
+    return {"genres": [{"id": g["id"], "label": g["label"]} for g in GENRES]}
+
+
+@router.get("/browse")
+def browse_books(genre: str = "", page: int = 1):
+    """Vitrine estilo Kindle: livros grátis em português por popularidade,
+    opcionalmente por gênero. Só Project Gutenberg (tem capa, assunto e
+    contagem de downloads)."""
+    topic = _GENRE_TOPIC.get(genre, "") if genre else ""
+    hits, has_more = gutendex.browse(topic=topic, page=max(1, page))
+    return {"groups": group_hits(hits), "has_more": has_more, "page": max(1, page)}
 
 
 @router.get("/search")

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 import httpx
 
@@ -40,6 +40,9 @@ class SourceHit:
     detail_url: str = ""        # página humana da obra
     cover_url: str = ""         # capa (se houver)
     warning: str = ""           # aviso a exibir (Internet Archive)
+    subjects: list = field(default_factory=list)  # gêneros/assuntos
+    downloads: int = 0          # popularidade (nº de downloads)
+    summary: str = ""           # sinopse, quando a fonte fornece
 
     def to_dict(self) -> dict:
         return asdict(self)

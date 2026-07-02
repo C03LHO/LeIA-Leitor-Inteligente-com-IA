@@ -33,6 +33,15 @@
     return mm ? `${h} h ${mm} min` : `${h} h`;
   }
 
+  async function showVersion() {
+    const el = document.getElementById("app-version");
+    if (!el) return;
+    try {
+      const info = await window.LeIA.api.getJSON("/api");
+      el.textContent = "v" + (info.version || "?");
+    } catch { el.textContent = ""; }
+  }
+
   async function refreshHardwareBadge() {
     const badge = document.getElementById("hw-badge");
     try {
@@ -120,7 +129,13 @@
       currentJobId = jobId;
       window.LeIA.currentJobId = jobId;
       window.LeIA.reader.renderDocument(doc);
-      const saved = parseInt(localStorage.getItem(`leia.progress.${jobId}`) || "-1", 10);
+      let saved = parseInt(localStorage.getItem(`leia.progress.${jobId}`) || "-1", 10);
+      // O servidor guarda o progresso em disco — usa o mais avançado dos dois.
+      try {
+        const sp = await window.LeIA.api.getJSON(`/api/pdf/${jobId}/progress`);
+        if (sp && typeof sp.index === "number" && sp.index > saved) saved = sp.index;
+      } catch {}
+      lastSavedIdx = saved > 0 ? saved : -1;
       window.LeIA.player.restorePosition(saved > 0 ? saved : 0);
       if (window.LeIA.player.renderBookmarks) window.LeIA.player.renderBookmarks();
       if (saved > 0) toast("📖 Retomando de onde você parou", "info");
@@ -139,9 +154,42 @@
     toast("📚 Livro adicionado à estante.", "success");
   }
 
+  let progressTimer = null;
+  let lastSavedIdx = -1;
+
+  function postProgress(jobId, idx, total) {
+    if (jobId == null || idx == null || idx < 0) return;
+    try {
+      const body = JSON.stringify({ index: idx, total: total || 0 });
+      // sendBeacon sobrevive ao fechamento da janela (fire-and-forget).
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(`/api/pdf/${jobId}/progress`, new Blob([body], { type: "application/json" }));
+      } else {
+        window.LeIA.api.postJSON(`/api/pdf/${jobId}/progress`, { index: idx, total: total || 0 }).catch(() => {});
+      }
+    } catch {}
+  }
+
+  function totalSentences() {
+    const r = window.LeIA.reader && window.LeIA.reader.state;
+    return (r && r.sentences && r.sentences.length) || 0;
+  }
+
+  // Salva o progresso no localStorage (instantâneo) E no servidor (em disco,
+  // com debounce) — assim não se perde por fechamento brusco/queda de energia.
   function saveProgress(globalIndex) {
     if (currentJobId == null || globalIndex == null) return;
     try { localStorage.setItem(`leia.progress.${currentJobId}`, String(globalIndex)); } catch {}
+    lastSavedIdx = globalIndex;
+    const jid = currentJobId;
+    const total = totalSentences();
+    if (progressTimer) clearTimeout(progressTimer);
+    progressTimer = setTimeout(() => postProgress(jid, globalIndex, total), 2500);
+  }
+
+  function flushProgress() {
+    if (progressTimer) { clearTimeout(progressTimer); progressTimer = null; }
+    if (currentJobId != null && lastSavedIdx >= 0) postProgress(currentJobId, lastSavedIdx, totalSentences());
   }
 
   // ---------- início / estante ----------
@@ -380,6 +428,13 @@
       document.addEventListener("click", (e) => { if (!qpop.contains(e.target) && e.target !== qbtn) qpop.classList.remove("open"); });
     }
 
+    // Garante que o progresso vá pro disco ao fechar/minimizar a janela.
+    window.addEventListener("pagehide", flushProgress);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushProgress();
+    });
+
+    showVersion();
     refreshHardwareBadge();
     refreshLibrary();
     refreshQueue();
