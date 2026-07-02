@@ -20,8 +20,9 @@ LANGUAGE_ID = "pt"
 
 # Parâmetros de geração afinados para narração estável (menos suspiros/ruídos
 # alucinados que os defaults 0.8/0.5): temperatura e expressividade mais baixas.
+# temperatura menor = menos "viagem" (o modelo inventa menos fala fora do texto).
 GEN_KWARGS = {
-    "temperature": 0.7,
+    "temperature": 0.6,
     "exaggeration": 0.4,
     "cfg_weight": 0.5,
     "repetition_penalty": 2.0,
@@ -137,13 +138,54 @@ class TTSEngine:
         self.ensure_loaded()
 
 
+# Pontuação que o modelo lê/pausa bem. Todo o resto que não for letra latina,
+# dígito ou espaço vira espaço (evita que o modelo "leia" símbolos ou alucine).
+_ALLOWED_PUNCT = set(".,;:!?()\"'")
+
+# Substituições explícitas: normaliza aspas/traços/reticências e troca alguns
+# símbolos por palavras faladas ou por uma pausa.
+_CHAR_MAP = {
+    "–": ",", "—": ",", "―": ",", "−": "-",          # travessões → pausa curta
+    "…": ".", "•": " ", "·": " ", "‣": " ", "◦": " ", "▪": " ", "●": " ",
+    "“": '"', "”": '"', "„": '"', "«": '"', "»": '"', "‟": '"',
+    "‘": "'", "’": "'", "‚": "'", "‛": "'", "`": "'", "´": "'",
+    " ": " ", " ": " ", " ": " ",       # espaços especiais
+    "​": "", "‌": "", "‍": "", "﻿": "",  # zero-width
+    "&": " e ", "@": " arroba ", "%": " por cento ", "°": " graus ",
+    "/": " ", "\\": " ", "*": " ", "_": " ", "|": " ", "~": " ",
+    "^": " ", "=": " ", "+": " ", "<": " ", ">": " ", "#": " ", "$": " ",
+    "[": "(", "]": ")", "{": "(", "}": ")",
+}
+
+
+def _is_speakable_char(ch: str) -> bool:
+    """True para o que o modelo pt-BR lê bem: letra latina, dígito, espaço ou
+    pontuação básica. Descarta emojis, formas geométricas, setas, símbolos
+    matemáticos e escritas não-latinas (cirílico, grego, CJK…)."""
+    if ch in (" ", "\t", "\n") or ch in _ALLOWED_PUNCT:
+        return True
+    if "0" <= ch <= "9":
+        return True
+    # Letra dentro do alcance latino (ASCII + Latin-1/Extended-A/B → cobre pt-BR).
+    if ch.isalpha() and ord(ch) <= 0x24F:
+        return True
+    return False
+
+
 def _sanitize_text(text: str) -> str:
-    """Normaliza unicode, remove caracteres de controle e limita o tamanho —
-    reduz a chance de tokens fora do alcance que travam o modelo."""
+    """Deixa só texto realmente falável em português. Símbolos, formas
+    geométricas e escritas estrangeiras viram espaço — o que impede o modelo
+    de "ler" essas coisas ou viajar inventando fala fora do texto."""
     t = unicodedata.normalize("NFC", text or "")
-    t = "".join(ch for ch in t if ch in (" ", "\t", "\n") or unicodedata.category(ch)[0] != "C")
-    t = re.sub(r"\s+", " ", t).strip()
-    return t[:800]
+    t = re.sub(r"https?://\S+|www\.\S+", " ", t)   # URLs leem horrível
+    t = re.sub(r"\S+@\S+\.\w+", " ", t)             # e-mails
+    t = "".join(_CHAR_MAP.get(ch, ch) for ch in t)
+    t = "".join(ch if _is_speakable_char(ch) else " " for ch in t)
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r"\s+([.,;:!?)])", r"\1", t)        # espaço antes de pontuação
+    t = re.sub(r"([.,;:!?])\1+", r"\1", t)          # pontuação repetida → uma
+    t = re.sub(r"\(\s*\)", " ", t)                   # parênteses vazios
+    return re.sub(r"\s+", " ", t).strip()[:800]
 
 
 def _silence_wav(seconds: float = 0.18) -> bytes:

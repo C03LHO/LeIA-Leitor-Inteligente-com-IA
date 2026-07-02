@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from backend.tts.engine import detect_hardware, get_engine, wav_duration_seconds
+from backend.tts.engine import (
+    _sanitize_text,
+    detect_hardware,
+    get_engine,
+    wav_duration_seconds,
+)
 from backend.tts.streamer import merge_enumerators, split_sentences
 from backend.tts.voices import (
     DEFAULT_VOICE_ID,
@@ -53,6 +58,34 @@ def test_merge_enumerators_joins_lone_markers():
     assert merge_enumerators(["5–6.", "A Lei Moral."]) == ["5–6. A Lei Moral."]
     assert merge_enumerators(["Texto normal."]) == ["Texto normal."]
     assert merge_enumerators(["7."]) == ["7."]  # sozinho no fim, permanece
+
+
+def test_sanitize_keeps_clean_portuguese():
+    assert _sanitize_text("O menino correu para casa.") == "O menino correu para casa."
+    assert _sanitize_text("1º lugar e 3ª posição") == "1º lugar e 3ª posição"
+
+
+def test_sanitize_strips_shapes_and_symbols():
+    # Formas geométricas soltas → nada falável.
+    assert _sanitize_text("◆ ■ ● ▲ ○ ►") == ""
+    # Formas no meio da frase são removidas, o texto continua legível.
+    assert _sanitize_text("Capítulo ■ 1: A ● chegada") == "Capítulo 1: A chegada"
+    assert _sanitize_text("★★★ 5 estrelas") == "5 estrelas"
+
+
+def test_sanitize_strips_foreign_scripts():
+    # Cirílico/CJK/árabe somem; a palavra latina permanece (nada de "viajar").
+    assert _sanitize_text("Текст 中文 مرحبا café") == "café"
+
+
+def test_sanitize_removes_urls_and_emails():
+    assert _sanitize_text("veja em https://exemplo.com/x?y=1 agora") == "veja em agora"
+    assert _sanitize_text("contato: a@b.com para falar") == "contato: para falar"
+
+
+def test_sanitize_normalizes_punctuation():
+    assert _sanitize_text("Ele disse “olá” — e sumiu…") == 'Ele disse "olá", e sumiu.'
+    assert _sanitize_text("Bom dia!!! Tudo bem???") == "Bom dia! Tudo bem?"
 
 
 def test_engine_load_optional():
