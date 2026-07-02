@@ -15,6 +15,6 @@ if not exist "%SETUP_FLAG%" (
     )
 )
 
-start "" "%VENV%\Scripts\pythonw.exe" -m backend.main --open
+start "" "%VENV%\Scripts\pythonw.exe" -m backend.main --window
 endlocal
 exit /b 0

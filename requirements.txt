@@ -7,6 +7,9 @@ python-multipart
 websockets
 httpx  # buscar/baixar livros grátis (Gutenberg, Wikisource, Internet Archive)
 
+# App de desktop: abre a UI numa janela nativa (WebView2) em vez do navegador.
+pywebview
+
 # PDF
 PyMuPDF==1.24.1
 pyphen==0.15.0

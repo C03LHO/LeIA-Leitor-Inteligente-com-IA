@@ -46,6 +46,13 @@ O app escolhe automaticamente a primeira porta livre em `8765–8775` e serve a
 interface na raiz. Abra `http://127.0.0.1:8765/` (ou a porta indicada no log).
 Status em `/api`:
 
+Para abrir como **aplicativo de desktop** (janela nativa via WebView2, sem
+navegador) — é assim que o instalador inicia o LeIA:
+
+```powershell
+python -m backend.main --window
+```
+
 ```json
 {"status": "ok", "name": "LeIA", "version": "0.1.0"}
 ```
