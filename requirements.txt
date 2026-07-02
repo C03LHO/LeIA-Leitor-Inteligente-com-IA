@@ -1,5 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cu124
 
+# setuptools 81+ REMOVEU o pkg_resources, que o chatterbox (via resemble-perth)
+# ainda importa → sem este pin a narração quebra com "'NoneType' object is not callable".
+setuptools<81
+
 # Web
 fastapi
 uvicorn[standard]

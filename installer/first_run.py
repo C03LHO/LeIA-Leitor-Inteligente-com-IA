@@ -76,7 +76,8 @@ class SetupRunner:
     def step_pip(self) -> None:
         self.log("[3/5] Atualizando pip…")
         py = VENV_DIR / "Scripts" / "python.exe"
-        self.run_cmd([str(py), "-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools"])
+        # setuptools<81: 81+ removeu o pkg_resources, do qual o chatterbox depende.
+        self.run_cmd([str(py), "-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools<81"])
 
     def step_requirements(self) -> None:
         self.log("[4/5] Instalando dependências (PyTorch, Chatterbox, etc.)…")
