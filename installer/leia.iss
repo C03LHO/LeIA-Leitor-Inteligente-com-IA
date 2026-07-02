@@ -6,7 +6,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "LeIA Project"
 #define MyAppURL "https://github.com/"
-#define MyAppExeName "launcher.bat"
+#define MyAppExeName "leia.vbs"
 
 [Setup]
 AppId={{B7A6F4C0-3D9E-4C7A-9D6B-A1F0B1B2B3C4}
@@ -26,8 +26,8 @@ SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\icon.ico
-ArchitecturesInstallIn64BitMode=x64
-ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64compatible
+ArchitecturesAllowed=x64compatible
 LicenseFile=EULA.txt
 
 [Languages]
@@ -41,6 +41,7 @@ Source: "_build\python\*"; DestDir: "{app}\python"; Flags: recursesubdirs create
 Source: "_build\backend\*"; DestDir: "{app}\backend"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "_build\frontend\*"; DestDir: "{app}\frontend"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "_build\voices\*"; DestDir: "{app}\voices"; Flags: recursesubdirs createallsubdirs ignoreversion skipifsourcedoesntexist
+Source: "leia.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "launcher.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "first_run.py"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\requirements.txt"; DestDir: "{app}"; Flags: ignoreversion

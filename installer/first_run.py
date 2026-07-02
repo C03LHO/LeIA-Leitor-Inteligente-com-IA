@@ -79,7 +79,7 @@ class SetupRunner:
         self.run_cmd([str(py), "-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools"])
 
     def step_requirements(self) -> None:
-        self.log("[4/5] Instalando dependências (PyTorch, XTTS, etc.)…")
+        self.log("[4/5] Instalando dependências (PyTorch, Chatterbox, etc.)…")
         py = VENV_DIR / "Scripts" / "python.exe"
         req = REQUIREMENTS if REQUIREMENTS.exists() else INSTALL_DIR.parent / "requirements.txt"
         if self.has_nvidia_gpu():
