@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "LeIA"
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765

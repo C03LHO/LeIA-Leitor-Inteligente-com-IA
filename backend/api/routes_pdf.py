@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import queue
 import threading
 import time
 import uuid
@@ -32,11 +31,14 @@ router = APIRouter(prefix="/api/pdf", tags=["pdf"])
 
 _jobs: dict[str, dict[str, Any]] = {}
 _audio_jobs: dict[str, dict[str, Any]] = {}
-# Fila de áudio serial (um livro por vez na GPU, estilo Steam).
-_audio_queue: "queue.Queue[str]" = queue.Queue()
-_queued: list[str] = []            # job_ids aguardando (para calcular a posição)
+# Fila de áudio serial (um livro por vez na GPU, estilo Steam). A fonte da
+# verdade é a lista _queued; o worker faz POLL dela (não bloqueia numa Queue),
+# e é RE-INICIADO se morrer — assim a fila nunca fica presa "para sempre".
+_queue_lock = threading.Lock()
+_queued: list[str] = []            # job_ids aguardando (ordem = posição)
 _audio_active: str | None = None   # job preparando agora
 _cancelled: set[str] = set()       # jobs apagados que ainda podem estar na fila
+_worker_thread: "threading.Thread | None" = None
 
 _LIBRARY_PATH = CACHE_DIR / "pdf" / "_library.json"
 
@@ -171,43 +173,87 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
     )
 
 
+def _next_job() -> str | None:
+    """Próximo job pendente da lista (descarta os cancelados/apagados)."""
+    with _queue_lock:
+        while _queued:
+            cand = _queued[0]
+            if cand in _cancelled:
+                _queued.pop(0)
+                _cancelled.discard(cand)
+                _audio_jobs.pop(cand, None)
+                continue
+            return cand
+    return None
+
+
 def _audio_worker() -> None:
-    """Consome a fila de áudio um livro por vez (serial → GPU não sobrecarrega)."""
+    """Consome a fila um livro por vez (serial → GPU não sobrecarrega).
+    Faz POLL da lista _queued em vez de bloquear numa Queue — se esta thread
+    morrer, o _ensure_worker()/watchdog cria outra e nada fica preso."""
     global _audio_active
     while True:
-        job_id = _audio_queue.get()
+        job_id = _next_job()
+        if job_id is None:
+            time.sleep(0.4)
+            continue
         try:
-            if job_id in _queued:
-                _queued.remove(job_id)
-            # Livro apagado enquanto estava na fila → ignora (não recria nada).
-            if job_id in _cancelled:
-                _cancelled.discard(job_id)
-                _audio_jobs.pop(job_id, None)
-                continue
             _audio_active = job_id
             rp = pdf_result_path(job_id)
             if rp.exists():
                 result = json.loads(rp.read_text(encoding="utf-8"))
                 _pregen_audio(job_id, _collect_sentences(result))
+            else:
+                _audio_jobs.pop(job_id, None)  # sem resultado (apagado) → descarta
         except Exception:
             logger.exception("Erro na fila de áudio (job %s)", job_id)
             _audio_jobs[job_id] = {"status": "error", "done": 0, "total": 0}
         finally:
             _audio_active = None
-            _audio_queue.task_done()
+            with _queue_lock:
+                if job_id in _queued:
+                    _queued.remove(job_id)
 
 
-threading.Thread(target=_audio_worker, daemon=True, name="leia-audio-queue").start()
+def _ensure_worker() -> None:
+    """Garante que existe UM worker vivo. Chamado ao enfileirar e pelo watchdog."""
+    global _worker_thread
+    with _queue_lock:
+        if _worker_thread is not None and _worker_thread.is_alive():
+            return
+        _worker_thread = threading.Thread(
+            target=_audio_worker, daemon=True, name="leia-audio-queue"
+        )
+        _worker_thread.start()
+
+
+def _queue_watchdog() -> None:
+    """Se o worker morrer com fila pendente, ressuscita em segundos."""
+    while True:
+        time.sleep(5)
+        try:
+            if _queued and (_worker_thread is None or not _worker_thread.is_alive()):
+                logger.warning("Worker de áudio caiu com fila pendente — reiniciando.")
+                _ensure_worker()
+        except Exception:
+            pass
+
+
+_ensure_worker()
+threading.Thread(target=_queue_watchdog, daemon=True, name="leia-audio-watchdog").start()
 
 
 def _enqueue_audio(job_id: str) -> bool:
     """Coloca um livro na fila de preparação de áudio (idempotente)."""
     if not pdf_result_path(job_id).exists():
         return False
+    _cancelled.discard(job_id)
     if _audio_active == job_id:
+        _ensure_worker()
         return True
     aj = _audio_jobs.get(job_id)
-    if aj and aj.get("status") in ("queued", "preparing"):
+    if aj and aj.get("status") in ("queued", "preparing") and job_id in _queued:
+        _ensure_worker()
         return True
     total = 0
     try:
@@ -215,8 +261,10 @@ def _enqueue_audio(job_id: str) -> bool:
     except Exception:
         pass
     _audio_jobs[job_id] = {"status": "queued", "done": 0, "total": total}
-    _queued.append(job_id)
-    _audio_queue.put(job_id)
+    with _queue_lock:
+        if job_id not in _queued:
+            _queued.append(job_id)
+    _ensure_worker()
     return True
 
 
@@ -555,10 +603,11 @@ def delete_doc(job_id: str):
             pass
     _jobs.pop(job_id, None)
     _audio_jobs.pop(job_id, None)
-    # 3) tira da fila de narração (evita "fantasma" na fila) — se estiver ativo
-    #    ou já na _audio_queue, marca como cancelado para o worker ignorar.
-    if job_id in _queued:
-        _queued.remove(job_id)
+    # 3) tira da fila de narração (evita "fantasma" na fila); se estiver ativo,
+    #    marca como cancelado para o worker parar e não recriar o índice.
+    with _queue_lock:
+        if job_id in _queued:
+            _queued.remove(job_id)
     _cancelled.add(job_id)
     return {"ok": True}
 
