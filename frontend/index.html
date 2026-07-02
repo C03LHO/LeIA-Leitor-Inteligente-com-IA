@@ -66,14 +66,16 @@
       <div class="welcome">
         <div class="welcome-logo">L</div>
         <h1 class="welcome-title">LeIA</h1>
-        <p class="welcome-sub">Arraste seu livro (PDF ou EPUB) aqui ou clique para selecionar</p>
+        <p class="welcome-sub">Arraste seus livros (PDF ou EPUB) aqui — pode soltar vários de uma vez</p>
         <div id="dropzone" class="dropzone">
           <div class="dropzone-icon">📄</div>
-          <div class="dropzone-title">Solte o arquivo aqui</div>
-          <div class="dropzone-sub">ou clique para procurar</div>
-          <input type="file" id="file-input" accept=".pdf,.epub,application/pdf,application/epub+zip" hidden />
+          <div class="dropzone-title">Solte os arquivos aqui</div>
+          <div class="dropzone-sub">ou clique para procurar (um ou vários)</div>
+          <input type="file" id="file-input" accept=".pdf,.epub,application/pdf,application/epub+zip" multiple hidden />
         </div>
-        <label class="prepare-toggle"><input type="checkbox" id="prepare-on-add" /> Já preparar a narração ao adicionar</label>
+        <label class="prepare-toggle" title="Sem marcar, o livro entra só como texto. A narração roda quando você der play, ou quando preparar pelo 🎧 na estante.">
+          <input type="checkbox" id="prepare-on-add" /> Já preparar a narração ao adicionar (opcional — pesa no armazenamento)
+        </label>
         <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
         <button id="btn-explore-welcome" class="explore-cta">
           <span class="explore-cta-globe">🌐</span>

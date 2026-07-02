@@ -83,10 +83,12 @@
           return;
         }
         if (s.status === "none") {
-          // Abriu um livro sem áudio → coloca na fila automaticamente (opt-in já foi no adicionar).
-          if (!requested) { requested = true; window.LeIA.api.postJSON(`/api/pdf/${jobId}/prepare`, {}).then(refreshQueue).catch(() => {}); }
-          setPrep("⏳ Preparando narração…", "preparing");
-          audioPoll = setTimeout(tick, 1500);
+          // Ler NÃO gera áudio (não pesa no disco/GPU). A narração é sob demanda:
+          // o play gera só o trecho que você ouvir. Para preparar o livro INTEIRO
+          // de propósito, use o botão 🎧 na estante.
+          window.LeIA.player.setReady(true);
+          setPrep("🎧 Narração sob demanda — é só dar play", "");
+          setTimeout(() => { if (currentJobId === jobId) setPrep(null); }, 4000);
           return;
         }
         if (s.status === "queued") {
