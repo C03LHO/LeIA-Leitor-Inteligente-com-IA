@@ -5,6 +5,8 @@ import queue
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,7 @@ from backend.epub.extractor import build_epub_document, extract_epub_cover
 from backend.pdf.cleaner import CleaningConfig
 from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author, render_cover
 from backend.pdf.reflow import build_document
+from backend.tts.engine import get_engine
 from backend.tts.streamer import get_or_synthesize
 from backend.tts.voices import DEFAULT_VOICE_ID
 from backend.utils.logging import get_logger
@@ -33,6 +36,7 @@ _audio_jobs: dict[str, dict[str, Any]] = {}
 _audio_queue: "queue.Queue[str]" = queue.Queue()
 _queued: list[str] = []            # job_ids aguardando (para calcular a posição)
 _audio_active: str | None = None   # job preparando agora
+_cancelled: set[str] = set()       # jobs apagados que ainda podem estar na fila
 
 _LIBRARY_PATH = CACHE_DIR / "pdf" / "_library.json"
 
@@ -95,29 +99,75 @@ def _collect_sentences(result: dict) -> list[str]:
 # --------------------------------------------------------------------------- #
 # Pré-geração de áudio (aquece o cache para a leitura tocar sem travar)
 # --------------------------------------------------------------------------- #
+# Timeout por frase: uma frase normal leva ~7s; o pior caso do modelo (esgotar
+# os tokens) ~40s. Acima de 75s a GPU/modelo travou — pulamos a frase para a
+# fila NUNCA congelar. 3 travadas seguidas = wedge → aborta e recarrega o modelo.
+_SYNTH_TIMEOUT = 75.0
+_synth_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="leia-synth")
+
+
 def _pregen_audio(job_id: str, sentences: list[str]) -> None:
+    global _synth_pool
     total = len(sentences)
     _audio_jobs[job_id] = {"status": "preparing", "done": 0, "total": total}
     if total == 0:
         _audio_jobs[job_id] = {"status": "done", "done": 0, "total": 0}
         _library_put(job_id, audio_ready=True)
         return
-    done = 0
-    failed = 0
+    # Carrega o modelo ANTES do loop (o 1º load é lento) para o timeout por frase
+    # medir só a síntese, não o carregamento.
+    try:
+        get_engine().ensure_loaded()
+    except Exception:
+        logger.exception("Falha ao carregar o modelo (job %s)", job_id)
+
+    done = failed = stalls = 0
+    aborted = False
     for text in sentences:
+        if job_id in _cancelled:   # livro apagado durante o preparo → para
+            aborted = True
+            break
         try:
-            get_or_synthesize(text, DEFAULT_VOICE_ID, 1.0)
+            _synth_pool.submit(get_or_synthesize, text, DEFAULT_VOICE_ID, 1.0).result(
+                timeout=_SYNTH_TIMEOUT
+            )
+            stalls = 0
+        except FuturesTimeout:
+            failed += 1
+            stalls += 1
+            logger.warning(
+                "Frase travou (>%.0fs), pulando (job %s, %d seguidas)",
+                _SYNTH_TIMEOUT, job_id, stalls,
+            )
+            # A thread travada não pode ser morta; troca o pool para as próximas.
+            _synth_pool.shutdown(wait=False, cancel_futures=True)
+            _synth_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="leia-synth")
+            if stalls >= 3:
+                logger.error("Síntese travada; abortando job %s e recarregando o modelo.", job_id)
+                try:
+                    get_engine()._reload_locked()
+                except Exception:
+                    logger.exception("Falha ao recarregar o modelo")
+                aborted = True
+                break
         except Exception:
             failed += 1
             logger.exception("Pré-geração de áudio falhou numa frase (job %s)", job_id)
         done += 1
         _audio_jobs[job_id]["done"] = done
-    # Só marca "pronto" se a síntese realmente funcionou (não esconde falha sistêmica).
-    ok = failed < total
+
+    # Livro apagado durante o preparo → não recria índice nem status.
+    if job_id in _cancelled:
+        _cancelled.discard(job_id)
+        _audio_jobs.pop(job_id, None)
+        logger.info("Preparo cancelado (livro apagado): job %s", job_id)
+        return
+    ok = (not aborted) and failed < total
     _audio_jobs[job_id]["status"] = "done" if ok else "error"
     _library_put(job_id, audio_ready=ok)
     logger.info(
-        "Pré-geração de áudio: job %s (%d frases, %d falhas, ready=%s)", job_id, total, failed, ok
+        "Pré-geração de áudio: job %s (%d frases, %d falhas, abort=%s, ready=%s)",
+        job_id, total, failed, aborted, ok,
     )
 
 
@@ -129,6 +179,11 @@ def _audio_worker() -> None:
         try:
             if job_id in _queued:
                 _queued.remove(job_id)
+            # Livro apagado enquanto estava na fila → ignora (não recria nada).
+            if job_id in _cancelled:
+                _cancelled.discard(job_id)
+                _audio_jobs.pop(job_id, None)
+                continue
             _audio_active = job_id
             rp = pdf_result_path(job_id)
             if rp.exists():
@@ -500,6 +555,11 @@ def delete_doc(job_id: str):
             pass
     _jobs.pop(job_id, None)
     _audio_jobs.pop(job_id, None)
+    # 3) tira da fila de narração (evita "fantasma" na fila) — se estiver ativo
+    #    ou já na _audio_queue, marca como cancelado para o worker ignorar.
+    if job_id in _queued:
+        _queued.remove(job_id)
+    _cancelled.add(job_id)
     return {"ok": True}
 
 
