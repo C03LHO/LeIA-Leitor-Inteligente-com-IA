@@ -131,8 +131,11 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
         return
     except Exception:
         logger.exception("Falha ao carregar o modelo (job %s)", job_id)
-    _audio_jobs[job_id] = {"status": "preparing", "done": 0, "total": total}
-
+    _audio_jobs[job_id] = {
+        "status": "preparing", "done": 0, "total": total,
+        "elapsed": 0, "eta": 0, "rate": 0.0,
+    }
+    started = time.monotonic()
     done = failed = stalls = 0
     aborted = False
     for text in sentences:
@@ -166,7 +169,22 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
             failed += 1
             logger.exception("Pré-geração de áudio falhou numa frase (job %s)", job_id)
         done += 1
-        _audio_jobs[job_id]["done"] = done
+        # Estatísticas detalhadas (tempo decorrido, velocidade real, ETA).
+        elapsed = time.monotonic() - started
+        rate = done / elapsed if elapsed > 0 else 0.0        # frases por segundo
+        aj = _audio_jobs.get(job_id)
+        if aj is not None:
+            aj["done"] = done
+            aj["elapsed"] = int(elapsed)
+            aj["eta"] = int((total - done) / rate) if rate > 0 else 0
+            aj["rate"] = round(rate, 3)
+        if done % 20 == 0 or done == total:
+            logger.info(
+                "Preparo job %s: %d/%d (%.1fs/frase, ETA ~%d min)",
+                job_id, done, total, elapsed / done, round(aj["eta"] / 60) if aj else 0,
+            )
+        if done % 25 == 0:
+            get_engine().empty_cache()   # alivia a VRAM na placa lotada
 
     # Livro apagado durante o preparo → não recria índice nem status.
     if job_id in _cancelled:
@@ -489,6 +507,10 @@ def audio_queue_state():
             "status": status,
             "done": aj.get("done", 0),
             "total": aj.get("total", 0),
+            "eta": aj.get("eta", 0),
+            "elapsed": aj.get("elapsed", 0),
+            "rate": aj.get("rate", 0.0),
+            "phase": aj.get("phase", ""),
         }
 
     items = []

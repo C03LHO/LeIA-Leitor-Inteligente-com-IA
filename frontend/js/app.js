@@ -115,11 +115,12 @@
           if (done >= pos + PLAY_BUFFER || (total && done >= total)) unlocked = true;
         }
         window.LeIA.player.setReady(unlocked);
-        const eta = (total && done > 0 && done < total) ? ` · ~${fmtDur((total - done) * 7)} restantes` : "";
+        const etaTxt = s.eta > 0 ? ` · ~${fmtDur(s.eta)} restantes` : "";
+        const spd = s.rate > 0 ? ` · ${Math.round(s.rate * 60)} frases/min` : "";
         const msg = done === 0
           ? "🔊 Carregando a voz… (pode levar ~20s no início)"
-          : unlocked ? `▶ Pode ouvir · preparando o resto (${pct}%${eta})`
-                     : `⏳ Preparando o início… (${pct}%${eta})`;
+          : unlocked ? `▶ Pode ouvir · ${done}/${total} (${pct}%)${spd}${etaTxt}`
+                     : `⏳ Preparando · ${done}/${total} (${pct}%)${spd}${etaTxt}`;
         setPrep(msg, unlocked ? "ready" : "preparing");
         audioPoll = setTimeout(tick, 1500);
       } catch { audioPoll = setTimeout(tick, 3000); }
@@ -382,10 +383,10 @@
         list.innerHTML = items.length ? "" : `<div class="bm-empty">Nada na fila.</div>`;
         items.forEach((it) => {
           const pct = it.total ? Math.round((it.done / it.total) * 100) : 0;
-          const eta = (it.status === "preparing" && it.total && it.done > 0 && it.done < it.total)
-            ? " · ~" + fmtDur((it.total - it.done) * 7) : "";
+          const etaTxt = it.eta > 0 ? " · ~" + fmtDur(it.eta) : "";
+          const spd = it.rate > 0 ? " · " + Math.round(it.rate * 60) + " f/min" : "";
           const statusTxt = it.status !== "preparing" ? "na fila"
-            : (it.done === 0 ? "carregando a voz…" : "preparando · " + pct + "%" + eta);
+            : (it.done === 0 ? "carregando a voz…" : `${it.done}/${it.total} (${pct}%)${spd}${etaTxt}`);
           const row = document.createElement("div");
           row.className = "queue-item";
           row.innerHTML = `<div class="queue-icon">${it.status === "preparing" ? `<div class="spinner"></div>` : "⏳"}</div>` +

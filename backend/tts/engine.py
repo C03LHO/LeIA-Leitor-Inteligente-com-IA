@@ -63,6 +63,29 @@ def detect_hardware() -> HardwareInfo:
     return HardwareInfo(device="cpu", gpu_name=None, vram_mb=None, cuda_available=False)
 
 
+def _tune_perf() -> None:
+    """Liga otimizações da GPU (TF32 + autotuner) para máxima velocidade."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+            torch.backends.cudnn.benchmark = True
+    except Exception:
+        pass
+
+
+def _empty_cache() -> None:
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
 class TTSEngine:
     """Lazy wrapper around Chatterbox Multilingual TTS (single native pt-BR voice)."""
 
@@ -92,11 +115,19 @@ class TTSEngine:
 
                 device = "cuda" if self.hardware.cuda_available else "cpu"
                 logger.info("Carregando Chatterbox (device=%s, gpu=%s)", device, self.hardware.gpu_name)
+                _tune_perf()  # TF32 + cudnn.benchmark → GPU no máximo
                 self._tts = ChatterboxMultilingualTTS.from_pretrained(device=device)
             except Exception as exc:
                 self._load_error = str(exc)
                 logger.exception("Falha ao carregar Chatterbox")
                 raise
+
+    def _generate(self, clean: str):
+        import torch
+
+        # inference_mode = mais rápido e usa menos VRAM que o modo normal.
+        with torch.inference_mode():
+            return self._tts.generate(clean, language_id=LANGUAGE_ID, **GEN_KWARGS)
 
     def synthesize(
         self,
@@ -116,25 +147,32 @@ class TTSEngine:
             return _silence_wav(0.18)
         with self._synth_lock:
             try:
-                wav = self._tts.generate(clean, language_id=LANGUAGE_ID, **GEN_KWARGS)
+                wav = self._generate(clean)
             except RuntimeError as exc:
-                if "CUDA" in str(exc):
-                    logger.error("Erro CUDA na síntese; recarregando o modelo e tentando de novo")
+                msg = str(exc).lower()
+                if "device-side assert" in msg:
+                    # Contexto CUDA envenenado → aqui SIM precisa recarregar.
+                    logger.error("device-side assert na síntese; recarregando o modelo")
                     self._reload_locked()
-                    wav = self._tts.generate(clean, language_id=LANGUAGE_ID, **GEN_KWARGS)
+                    wav = self._generate(clean)
+                elif "cuda" in msg or "out of memory" in msg:
+                    # OOM/erro transitório: limpa o cache e tenta DE NOVO SEM reload.
+                    # (recarregar a cada erro causava thrashing e travava o preparo.)
+                    logger.warning("Erro CUDA na síntese (%s) — limpando VRAM e repetindo", str(exc)[:90])
+                    _empty_cache()
+                    wav = self._generate(clean)
                 else:
                     raise
         return _wav_bytes_from_array(_trim_audio(_to_mono_float(wav)))
 
-    def _reload_locked(self) -> None:
-        """Best-effort: recarrega o modelo após um erro CUDA (chamado sob _synth_lock)."""
-        self._tts = None
-        try:
-            import torch
+    def empty_cache(self) -> None:
+        _empty_cache()
 
-            torch.cuda.empty_cache()
-        except Exception:
-            pass
+    def _reload_locked(self) -> None:
+        """Best-effort: recarrega o modelo após um erro CUDA GRAVE (device-side
+        assert). Chamado sob _synth_lock."""
+        self._tts = None
+        _empty_cache()
         self.ensure_loaded()
 
 
