@@ -115,8 +115,12 @@
           if (done >= pos + PLAY_BUFFER || (total && done >= total)) unlocked = true;
         }
         window.LeIA.player.setReady(unlocked);
-        const eta = (total && done < total) ? ` · ~${fmtDur((total - done) * 7)} restantes` : "";
-        setPrep(unlocked ? `▶ Pode ouvir · preparando o resto (${pct}%${eta})` : `⏳ Preparando o início… (${pct}%${eta})`, unlocked ? "ready" : "preparing");
+        const eta = (total && done > 0 && done < total) ? ` · ~${fmtDur((total - done) * 7)} restantes` : "";
+        const msg = done === 0
+          ? "🔊 Carregando a voz… (pode levar ~20s no início)"
+          : unlocked ? `▶ Pode ouvir · preparando o resto (${pct}%${eta})`
+                     : `⏳ Preparando o início… (${pct}%${eta})`;
+        setPrep(msg, unlocked ? "ready" : "preparing");
         audioPoll = setTimeout(tick, 1500);
       } catch { audioPoll = setTimeout(tick, 3000); }
     }
@@ -378,13 +382,15 @@
         list.innerHTML = items.length ? "" : `<div class="bm-empty">Nada na fila.</div>`;
         items.forEach((it) => {
           const pct = it.total ? Math.round((it.done / it.total) * 100) : 0;
-          const eta = (it.status === "preparing" && it.total && it.done < it.total)
+          const eta = (it.status === "preparing" && it.total && it.done > 0 && it.done < it.total)
             ? " · ~" + fmtDur((it.total - it.done) * 7) : "";
+          const statusTxt = it.status !== "preparing" ? "na fila"
+            : (it.done === 0 ? "carregando a voz…" : "preparando · " + pct + "%" + eta);
           const row = document.createElement("div");
           row.className = "queue-item";
           row.innerHTML = `<div class="queue-icon">${it.status === "preparing" ? `<div class="spinner"></div>` : "⏳"}</div>` +
             `<div class="queue-meta"><div class="queue-title">${escapeHTML(it.title)}</div>` +
-            `<div class="queue-status">${it.status === "preparing" ? "preparando · " + pct + "%" + eta : "na fila"}</div></div>`;
+            `<div class="queue-status">${statusTxt}</div></div>`;
           list.appendChild(row);
         });
       }

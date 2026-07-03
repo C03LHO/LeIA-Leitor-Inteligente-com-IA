@@ -116,12 +116,22 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
         _audio_jobs[job_id] = {"status": "done", "done": 0, "total": 0}
         _library_put(job_id, audio_ready=True)
         return
-    # Carrega o modelo ANTES do loop (o 1º load é lento) para o timeout por frase
-    # medir só a síntese, não o carregamento.
+    # Carrega o modelo ANTES do loop, COM TIMEOUT. Se a GPU estiver sob pressão
+    # e o load travar, o job vira "error" em vez de ficar 0% para sempre.
+    if not get_engine().loaded:
+        _audio_jobs[job_id]["phase"] = "loading"   # frontend: "Carregando a voz…"
     try:
-        get_engine().ensure_loaded()
+        _synth_pool.submit(get_engine().ensure_loaded).result(timeout=180)
+    except FuturesTimeout:
+        logger.error("Modelo travou ao carregar (job %s) — GPU sobrecarregada? abortando.", job_id)
+        _synth_pool.shutdown(wait=False, cancel_futures=True)
+        _synth_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="leia-synth")
+        _audio_jobs[job_id] = {"status": "error", "done": 0, "total": total}
+        _library_put(job_id, audio_ready=False)
+        return
     except Exception:
         logger.exception("Falha ao carregar o modelo (job %s)", job_id)
+    _audio_jobs[job_id] = {"status": "preparing", "done": 0, "total": total}
 
     done = failed = stalls = 0
     aborted = False
