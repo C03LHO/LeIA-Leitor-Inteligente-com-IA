@@ -80,7 +80,7 @@ class SetupRunner:
         self.run_cmd([str(py), "-m", "pip", "install", "--upgrade", "pip", "wheel", "setuptools<81"])
 
     def step_requirements(self) -> None:
-        self.log("[4/5] Instalando dependências (PyTorch, Chatterbox, etc.)…")
+        self.log("[4/5] Instalando dependências (PyTorch, XTTS-v2, etc.)…")
         py = VENV_DIR / "Scripts" / "python.exe"
         req = REQUIREMENTS if REQUIREMENTS.exists() else INSTALL_DIR.parent / "requirements.txt"
         if self.has_nvidia_gpu():
@@ -109,13 +109,16 @@ class SetupRunner:
         return "\n".join(out)
 
     def step_models(self) -> None:
-        self.log("[5/5] Baixando modelo de voz (Chatterbox)… isso pode demorar.")
+        self.log("[5/5] Baixando o modelo de voz (XTTS-v2, ~1.9 GB)… isso pode demorar.")
         py = VENV_DIR / "Scripts" / "python.exe"
         snippet = (
-            "import torch;"
-            "from chatterbox.mtl_tts import ChatterboxMultilingualTTS;"
-            "ChatterboxMultilingualTTS.from_pretrained("
-            "device='cuda' if torch.cuda.is_available() else 'cpu');"
+            "import os; os.environ['COQUI_TOS_AGREED']='1';"
+            "import torch, transformers.pytorch_utils as tpu;"
+            "tpu.isin_mps_friendly=getattr(tpu,'isin_mps_friendly',"
+            "lambda elements,test_elements: torch.isin(elements,test_elements));"
+            "from TTS.api import TTS;"
+            "TTS('tts_models/multilingual/multi-dataset/xtts_v2')"
+            ".to('cuda' if torch.cuda.is_available() else 'cpu');"
             "import nltk; nltk.download('punkt_tab', quiet=True);"
             "print('models ok')"
         )

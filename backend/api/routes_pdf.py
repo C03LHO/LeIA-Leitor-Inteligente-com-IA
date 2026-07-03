@@ -20,7 +20,7 @@ from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author
 from backend.pdf.reflow import build_document
 from backend.tts.engine import get_engine
 from backend.tts.streamer import get_or_synthesize
-from backend.tts.voices import DEFAULT_VOICE_ID
+from backend.tts.voices import DEFAULT_VOICE_ID, all_voices, get_active_voice_id
 from backend.utils.logging import get_logger
 from backend.utils.paths import audio_cache_path, book_upload_path, pdf_result_path
 
@@ -135,6 +135,7 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
         "status": "preparing", "done": 0, "total": total,
         "elapsed": 0, "eta": 0, "rate": 0.0,
     }
+    voice = get_active_voice_id()   # prepara na voz selecionada pelo usuário
     started = time.monotonic()
     done = failed = stalls = 0
     aborted = False
@@ -143,7 +144,7 @@ def _pregen_audio(job_id: str, sentences: list[str]) -> None:
             aborted = True
             break
         try:
-            _synth_pool.submit(get_or_synthesize, text, DEFAULT_VOICE_ID, 1.0).result(
+            _synth_pool.submit(get_or_synthesize, text, voice, 1.0).result(
                 timeout=_SYNTH_TIMEOUT
             )
             stalls = 0
@@ -494,6 +495,18 @@ def prepare_audio(job_id: str):
     return {"ok": True, "status": _audio_jobs.get(job_id, {}).get("status", "queued"), "position": pos}
 
 
+@router.post("/{job_id}/cancel-audio")
+def cancel_audio(job_id: str):
+    """Cancela o preparo da narração SEM apagar o livro (tira da fila / para o
+    worker se estiver ativo). O livro continua na estante."""
+    with _queue_lock:
+        if job_id in _queued:
+            _queued.remove(job_id)
+    _cancelled.add(job_id)          # se estiver ativo, o worker para no próximo laço
+    _audio_jobs.pop(job_id, None)
+    return {"ok": True}
+
+
 @router.get("/queue")
 def audio_queue_state():
     lib = _load_library()
@@ -614,10 +627,11 @@ def delete_doc(job_id: str):
         try:
             result = json.loads(rp.read_text(encoding="utf-8"))
             for text in _collect_sentences(result):
-                try:
-                    audio_cache_path(text, DEFAULT_VOICE_ID, 1.0).unlink(missing_ok=True)
-                except OSError:
-                    pass
+                for v in all_voices():   # limpa o cache de TODAS as vozes
+                    try:
+                        audio_cache_path(text, v.id, 1.0).unlink(missing_ok=True)
+                    except OSError:
+                        pass
         except Exception:
             logger.exception("Falha ao apagar áudio do job %s", job_id)
     # 2) índice + arquivos (resultado, capa, original)

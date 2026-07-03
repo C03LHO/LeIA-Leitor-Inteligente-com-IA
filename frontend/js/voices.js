@@ -6,10 +6,17 @@
     previewingId: null,
   };
 
+  function escapeHTML(s) {
+    return String(s || "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[c]);
+  }
+
   async function refresh() {
     try {
       const r = await window.LeIA.api.getJSON("/api/voices");
       state.voices = r.voices || [];
+      if (!state.selectedId) state.selectedId = r.active || (state.voices[0] && state.voices[0].id);
       render();
       updateVoiceLabel();
     } catch (e) {
@@ -19,23 +26,24 @@
 
   function updateVoiceLabel() {
     const v = state.voices.find((x) => x.id === state.selectedId);
-    if (v) document.getElementById("voice-label").textContent = v.name;
+    const el = document.getElementById("voice-label");
+    if (v && el) el.textContent = v.name;
   }
 
-  function selectVoice(id) {
+  async function selectVoice(id) {
     state.selectedId = id;
     const v = state.voices.find((x) => x.id === id);
-    if (v) {
-      window.LeIA.player.setVoice(id, v.name);
-    }
+    if (v && window.LeIA.player) window.LeIA.player.setVoice(id, v.name);
+    try { localStorage.setItem("leia.voice", id); } catch {}
     render();
+    updateVoiceLabel();
+    // Persiste no servidor → a PREPARAÇÃO de áudio usa esta voz.
+    try { await window.LeIA.api.postJSON("/api/voices/active", { voice: id }); } catch {}
+    if (v) window.LeIA.toast(`🎙 Voz: ${v.name}`, "success");
   }
 
   function stopPreview() {
-    if (state.previewAudio) {
-      state.previewAudio.pause();
-      state.previewAudio = null;
-    }
+    if (state.previewAudio) { state.previewAudio.pause(); state.previewAudio = null; }
     state.previewingId = null;
     document.querySelectorAll(".voice-preview-btn").forEach((b) => b.classList.remove("playing"));
   }
@@ -44,143 +52,73 @@
     if (state.previewingId === id) { stopPreview(); return; }
     stopPreview();
     state.previewingId = id;
-    document.querySelectorAll(`.voice-preview-btn[data-id="${id}"]`).forEach((b) =>
-      b.classList.add("playing")
-    );
+    document.querySelectorAll(`.voice-preview-btn[data-id="${id}"]`).forEach((b) => b.classList.add("loading"));
     try {
-      const url = window.LeIA.api.previewVoiceURL(id);
+      // POST (gera/serve o preview cacheado) → toca o WAV.
+      const resp = await fetch(`/api/voices/${encodeURIComponent(id)}/preview`, { method: "POST" });
+      if (!resp.ok) throw new Error(await resp.text());
+      const url = URL.createObjectURL(await resp.blob());
+      document.querySelectorAll(`.voice-preview-btn[data-id="${id}"]`).forEach((b) => { b.classList.remove("loading"); b.classList.add("playing"); });
       state.previewAudio = new Audio(url);
-      state.previewAudio.onended = () => stopPreview();
-      state.previewAudio.onerror = () => {
-        stopPreview();
-        window.LeIA.toast("Falha no preview", "danger");
-      };
+      state.previewAudio.onended = () => { stopPreview(); URL.revokeObjectURL(url); };
+      state.previewAudio.onerror = () => { stopPreview(); window.LeIA.toast("Falha no preview", "danger"); };
       await state.previewAudio.play();
     } catch (e) {
       stopPreview();
-      window.LeIA.toast("Falha no preview: " + e.message, "danger");
+      window.LeIA.toast("Falha no preview: " + (e.message || e), "danger");
     }
   }
 
-  async function removeVoice(id) {
-    if (!confirm("Remover esta voz personalizada?")) return;
-    try {
-      await window.LeIA.api.del(`/api/voices/${id}`);
-      if (state.selectedId === id) {
-        state.selectedId = "ana_florence";
-        window.LeIA.player.setVoice("ana_florence", "Ana");
-      }
-      await refresh();
-    } catch (e) {
-      window.LeIA.toast("Falha ao remover: " + e.message, "danger");
-    }
-  }
-
-  async function uploadVoice(file) {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".wav")) {
-      window.LeIA.toast("Envie um arquivo .wav", "warning");
-      return;
-    }
-    const name = prompt("Nome da voz:", file.name.replace(/\.wav$/i, ""));
-    if (!name) return;
-    try {
-      window.LeIA.toast("Enviando voz…", "info");
-      await window.LeIA.api.uploadFile("/api/voices/upload", file, null, { name });
-      window.LeIA.toast("Voz adicionada ✓", "success");
-      await refresh();
-    } catch (e) {
-      window.LeIA.toast("Falha: " + e.message, "danger");
-    }
+  function voiceItem(v) {
+    const item = document.createElement("div");
+    item.className = "voice-item" + (v.id === state.selectedId ? " selected" : "") + (v.recommended ? " recommended" : "");
+    item.innerHTML = `
+      <div class="voice-radio"></div>
+      <div class="voice-meta">
+        <div class="voice-name">${escapeHTML(v.name)}${v.recommended ? '<span class="voice-badge">recomendada</span>' : ""}</div>
+        <div class="voice-style">${escapeHTML(v.gender || "")}${v.style ? " · " + escapeHTML(v.style) : ""}</div>
+        <div class="voice-desc">${escapeHTML(v.description || "")}</div>
+      </div>
+      <button class="voice-preview-btn" data-id="${v.id}" title="Ouvir amostra">▶</button>`;
+    item.addEventListener("click", (e) => {
+      if (e.target.closest(".voice-preview-btn")) return;
+      selectVoice(v.id);
+    });
+    item.querySelector(".voice-preview-btn").addEventListener("click", (e) => { e.stopPropagation(); playPreview(v.id); });
+    return item;
   }
 
   function render() {
-    const wrap = document.getElementById("voices-list");
-    if (!wrap) return;
-    const embedded = state.voices.filter((v) => !v.custom);
-    const custom = state.voices.filter((v) => v.custom);
-    wrap.innerHTML = "";
-
-    function renderGroup(label, items) {
-      if (items.length === 0) return;
-      const lbl = document.createElement("div");
-      lbl.className = "voices-group-label";
-      lbl.textContent = label;
-      wrap.appendChild(lbl);
-      items.forEach((v) => {
-        const item = document.createElement("div");
-        item.className = "voice-item" + (v.id === state.selectedId ? " selected" : "");
-        item.innerHTML = `
-          <div class="voice-radio"></div>
-          <div class="voice-meta">
-            <div class="voice-name">${escapeHTML(v.name)}</div>
-            <div class="voice-style">${escapeHTML(v.style || "")}</div>
-            <div class="voice-desc">${escapeHTML(v.description || "")}</div>
-          </div>
-          <button class="voice-preview-btn" data-id="${v.id}" title="Preview">▶</button>
-          ${v.custom ? `<button class="voice-delete-btn" data-id="${v.id}" title="Remover">🗑</button>` : `<div></div>`}
-        `;
-        item.addEventListener("click", (e) => {
-          if (e.target.closest(".voice-preview-btn") || e.target.closest(".voice-delete-btn")) return;
-          selectVoice(v.id);
-        });
-        item.querySelector(".voice-preview-btn").addEventListener("click", (e) => {
-          e.stopPropagation();
-          playPreview(v.id);
-        });
-        const delBtn = item.querySelector(".voice-delete-btn");
-        if (delBtn) delBtn.addEventListener("click", (e) => { e.stopPropagation(); removeVoice(v.id); });
-        wrap.appendChild(item);
-      });
-    }
-
-    renderGroup("Embutidas", embedded);
-    renderGroup("Personalizadas", custom);
-  }
-
-  function escapeHTML(s) {
-    return String(s || "").replace(/[&<>"']/g, (c) => ({
-      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-    })[c]);
+    ["voices-list", "voices-settings-list"].forEach((wid) => {
+      const wrap = document.getElementById(wid);
+      if (!wrap) return;
+      wrap.innerHTML = "";
+      state.voices.forEach((v) => wrap.appendChild(voiceItem(v)));
+    });
   }
 
   function initVoices() {
-    try {
-      const v = localStorage.getItem("leia.voice");
-      state.selectedId = v || "ana_florence";
-    } catch { state.selectedId = "ana_florence"; }
-    window.LeIA.player.setVoice(state.selectedId, "");
+    try { state.selectedId = localStorage.getItem("leia.voice") || null; } catch { state.selectedId = null; }
 
     const btn = document.getElementById("btn-voice");
     const pop = document.getElementById("voices-popover");
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      if (pop.classList.contains("open")) {
-        pop.classList.remove("open");
-        stopPreview();
-      } else {
-        const rect = btn.getBoundingClientRect();
-        pop.style.left = `${Math.max(8, rect.left - 200)}px`;
-        pop.style.bottom = `calc(100vh - ${rect.top - 8}px)`;
-        pop.classList.add("open");
-      }
-    });
-    document.addEventListener("click", (e) => {
-      if (!pop.contains(e.target) && e.target !== btn) {
-        if (pop.classList.contains("open")) {
-          pop.classList.remove("open");
-          stopPreview();
+    if (btn && pop) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (pop.classList.contains("open")) { pop.classList.remove("open"); stopPreview(); }
+        else {
+          const rect = btn.getBoundingClientRect();
+          pop.style.left = `${Math.max(8, rect.left - 200)}px`;
+          pop.style.bottom = `calc(100vh - ${rect.top - 8}px)`;
+          pop.classList.add("open");
         }
-      }
-    });
-
-    const fileInput = document.getElementById("voice-file-input");
-    document.getElementById("btn-upload-voice").addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", () => {
-      if (fileInput.files[0]) uploadVoice(fileInput.files[0]);
-      fileInput.value = "";
-    });
-
+      });
+      document.addEventListener("click", (e) => {
+        if (!pop.contains(e.target) && e.target !== btn && pop.classList.contains("open")) {
+          pop.classList.remove("open"); stopPreview();
+        }
+      });
+    }
     refresh();
   }
 

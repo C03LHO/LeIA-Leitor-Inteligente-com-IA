@@ -99,7 +99,7 @@ class XTTSEngine:
             except Exception:
                 return []
 
-    def _generate(self, clean: str):
+    def _generate(self, clean: str, speaker: str):
         import torch
 
         # repetition_penalty alto + top_k/top_p contêm o "rambling" (o XTTS às
@@ -107,7 +107,7 @@ class XTTSEngine:
         with torch.inference_mode():
             return self._tts.tts(
                 text=clean,
-                speaker=self._speaker,
+                speaker=speaker,
                 language="pt",
                 split_sentences=True,
                 temperature=0.7,
@@ -125,23 +125,23 @@ class XTTSEngine:
         language: str = "pt",
     ) -> bytes:
         self.ensure_loaded()
-        resolve_voice(voice_id)
+        speaker = resolve_voice(voice_id).id  # id do catálogo = falante do XTTS
         clean = _sanitize_text(text)
         if sum(ch.isalpha() for ch in clean) < 2:
             return _silence_wav(0.18)
         with self._synth_lock:
             try:
-                wav = self._generate(clean)
+                wav = self._generate(clean, speaker)
             except RuntimeError as exc:
                 msg = str(exc).lower()
                 if "device-side assert" in msg:
                     logger.error("device-side assert no XTTS; recarregando o modelo")
                     self._reload_locked()
-                    wav = self._generate(clean)
+                    wav = self._generate(clean, speaker)
                 elif "cuda" in msg or "out of memory" in msg:
                     logger.warning("Erro CUDA no XTTS (%s) — limpando VRAM e repetindo", str(exc)[:90])
                     _empty_cache()
-                    wav = self._generate(clean)
+                    wav = self._generate(clean, speaker)
                 else:
                     raise
         return _wav_bytes_from_array(_trim_audio(_to_mono_float(wav)))

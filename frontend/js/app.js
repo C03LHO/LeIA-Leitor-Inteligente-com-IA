@@ -24,6 +24,39 @@
     })[c]);
   }
 
+  // Confirmação estilizada (substitui o confirm() nativo). Retorna Promise<bool>.
+  function confirmDialog({ title = "Tem certeza?", message = "", okText = "Confirmar", icon = "🗑️", danger = true } = {}) {
+    return new Promise((resolve) => {
+      const bd = document.getElementById("confirm-backdrop");
+      if (!bd) { resolve(window.confirm(message || title)); return; }
+      document.getElementById("confirm-title").textContent = title;
+      document.getElementById("confirm-msg").textContent = message;
+      document.getElementById("confirm-icon").textContent = icon;
+      const ok = document.getElementById("confirm-ok");
+      const cancel = document.getElementById("confirm-cancel");
+      ok.textContent = okText;
+      ok.classList.toggle("danger", !!danger);
+      bd.classList.add("open");
+      function cleanup(result) {
+        bd.classList.remove("open");
+        ok.removeEventListener("click", onOk);
+        cancel.removeEventListener("click", onCancel);
+        bd.removeEventListener("click", onBackdrop);
+        document.removeEventListener("keydown", onKey);
+        resolve(result);
+      }
+      const onOk = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      const onBackdrop = (e) => { if (e.target === bd) cleanup(false); };
+      const onKey = (e) => { if (e.key === "Escape") cleanup(false); else if (e.key === "Enter") cleanup(true); };
+      ok.addEventListener("click", onOk);
+      cancel.addEventListener("click", onCancel);
+      bd.addEventListener("click", onBackdrop);
+      document.addEventListener("keydown", onKey);
+      setTimeout(() => ok.focus(), 30);
+    });
+  }
+
   function fmtDur(secs) {
     secs = Math.max(0, Math.round(secs));
     if (secs < 60) return "< 1 min";
@@ -203,8 +236,9 @@
   function goHome() {
     stopAudioPoll();
     setPrep(null);
-    const ex = document.getElementById("view-explore");
-    if (ex) ex.classList.add("hidden");
+    ["view-explore", "view-downloads"].forEach((id) => {
+      const el = document.getElementById(id); if (el) el.classList.add("hidden");
+    });
     currentJobId = null;
     window.LeIA.currentJobId = null;
     searchResults = null;
@@ -275,7 +309,13 @@
     });
     card.querySelector(".book-del").addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (!confirm(`Remover "${it.title || it.filename}" da estante?`)) return;
+      const yes = await confirmDialog({
+        title: "Remover livro",
+        message: `Remover “${it.title || it.filename}” da estante? O texto e a narração já gerada serão apagados do disco.`,
+        okText: "Remover",
+        icon: "🗑️",
+      });
+      if (!yes) return;
       try {
         await window.LeIA.api.del(`/api/pdf/${it.job_id}`);
         try { localStorage.removeItem(`leia.progress.${it.job_id}`); } catch {}
@@ -288,13 +328,40 @@
     return card;
   }
 
-  async function moveToCollection(it) {
-    const existing = [...new Set(allItems.map((x) => x.collection).filter(Boolean))];
-    const hint = existing.length ? `\nExistentes: ${existing.join(", ")}` : "";
-    const name = prompt(`Coleção para "${it.title || it.filename}" (vazio = nenhuma):${hint}`, it.collection || "");
-    if (name === null) return;
+  let collectionTarget = null;
+
+  function moveToCollection(it) {
+    collectionTarget = it;
+    const bd = document.getElementById("collection-backdrop");
+    document.getElementById("collection-book").textContent = it.title || it.filename;
+    const opts = document.getElementById("collection-options");
+    const existing = [...new Set(allItems.map((x) => x.collection).filter(Boolean))].sort();
+    const cur = it.collection || "";
+    opts.innerHTML = "";
+    const mk = (label, value, none) => {
+      const b = document.createElement("button");
+      b.className = "collection-opt" + (cur === value ? " active" : "") + (none ? " none" : "");
+      b.innerHTML = `<span class="collection-opt-label">${none ? "🚫" : "📁"} ${escapeHTML(label)}</span>` +
+        (cur === value ? `<span class="collection-check">✓</span>` : "");
+      b.addEventListener("click", () => assignCollection(value));
+      return b;
+    };
+    opts.appendChild(mk("Sem coleção", "", true));
+    existing.forEach((c) => opts.appendChild(mk(c, c)));
+    const inp = document.getElementById("collection-new-input");
+    inp.value = "";
+    bd.classList.add("open");
+    setTimeout(() => inp.focus(), 30);
+  }
+
+  async function assignCollection(name) {
+    const it = collectionTarget;
+    if (!it) return;
+    const value = (name || "").trim();
     try {
-      await window.LeIA.api.postJSON(`/api/pdf/${it.job_id}/collection`, { collection: name.trim() });
+      await window.LeIA.api.postJSON(`/api/pdf/${it.job_id}/collection`, { collection: value });
+      document.getElementById("collection-backdrop").classList.remove("open");
+      toast(value ? `📁 Movido para “${value}”` : "Removido da coleção", value ? "success" : "info");
       refreshLibrary();
     } catch (e) { toast("Falha: " + e.message, "danger"); }
   }
@@ -365,10 +432,107 @@
   }
 
   // ---------- fila de narração ----------
+  function isDownloadsOpen() {
+    const v = document.getElementById("view-downloads");
+    return v && !v.classList.contains("hidden");
+  }
+
+  function openDownloads() {
+    ["view-welcome", "view-explore", "view-processing", "main-body", "player-bar"].forEach((id) => {
+      const el = document.getElementById(id); if (el) el.classList.add("hidden");
+    });
+    document.getElementById("view-downloads").classList.remove("hidden");
+    refreshQueue();
+  }
+  function closeDownloads() {
+    document.getElementById("view-downloads").classList.add("hidden");
+    document.getElementById("view-welcome").classList.remove("hidden");
+    refreshLibrary();
+  }
+
+  async function cancelPrep(jobId) {
+    try { await window.LeIA.api.postJSON(`/api/pdf/${jobId}/cancel-audio`, {}); refreshQueue(); }
+    catch (e) { toast("Falha ao cancelar: " + e.message, "danger"); }
+  }
+
+  function activeVoiceName() {
+    try {
+      const s = window.LeIA.voices && window.LeIA.voices.state;
+      const v = s && s.voices.find((x) => x.id === s.selectedId);
+      return v ? v.name : "—";
+    } catch { return "—"; }
+  }
+
+  function coverBlock(jobId, cls) {
+    return `<div class="${cls}"><div class="${cls}-fallback">📖</div>` +
+      `<img src="/api/pdf/${jobId}/cover" onload="this.classList.add('loaded')" onerror="this.remove()"></div>`;
+  }
+
+  function renderDownloads(items) {
+    const activeWrap = document.getElementById("dl-active");
+    const upHead = document.getElementById("dl-upnext-head");
+    const upWrap = document.getElementById("dl-upnext");
+    const empty = document.getElementById("dl-empty");
+    if (!activeWrap) return;
+    if (!items.length) {
+      activeWrap.innerHTML = ""; upWrap.innerHTML = "";
+      upHead.classList.add("hidden"); empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+    const active = items.find((it) => it.status === "preparing");
+    const upnext = items.filter((it) => it.status !== "preparing");
+
+    if (active) {
+      const pct = active.total ? Math.round((active.done / active.total) * 100) : 0;
+      const stage = active.done === 0 ? "🔊 Carregando a voz…" : "Preparando narração";
+      const spd = active.rate > 0 ? `${Math.round(active.rate * 60)} frases/min` : "—";
+      const eta = active.eta > 0 ? "~" + fmtDur(active.eta) : "calculando…";
+      const el = active.elapsed > 0 ? fmtDur(active.elapsed) : "—";
+      activeWrap.innerHTML = `
+        <div class="dl-hero">
+          ${coverBlock(active.job_id, "dl-hero-cover")}
+          <div class="dl-hero-info">
+            <div class="dl-hero-title">${escapeHTML(active.title)}</div>
+            <div class="dl-hero-stage">${stage}</div>
+            <div class="dl-hero-bar"><div class="dl-hero-fill" style="width:${pct}%"></div></div>
+            <div class="dl-hero-line">
+              <span>${active.done}/${active.total} frases · <b>${pct}%</b></span>
+              <span class="dl-hero-eta">Tempo restante estimado: <b>${eta}</b></span>
+            </div>
+            <div class="dl-hero-metrics">
+              <div class="dl-metric"><span class="dl-metric-k">Velocidade</span><span class="dl-metric-v">${spd}</span></div>
+              <div class="dl-metric"><span class="dl-metric-k">Decorrido</span><span class="dl-metric-v">${el}</span></div>
+              <div class="dl-metric"><span class="dl-metric-k">Voz</span><span class="dl-metric-v">${escapeHTML(activeVoiceName())}</span></div>
+            </div>
+          </div>
+          <button class="dl-hero-cancel" title="Cancelar preparo">Cancelar</button>
+        </div>`;
+      activeWrap.querySelector(".dl-hero-cancel").addEventListener("click", () => cancelPrep(active.job_id));
+    } else {
+      activeWrap.innerHTML = "";
+    }
+
+    upHead.classList.toggle("hidden", upnext.length === 0);
+    upHead.textContent = `A seguir (${upnext.length})`;
+    upWrap.innerHTML = "";
+    upnext.forEach((it, i) => {
+      const row = document.createElement("div");
+      row.className = "dl-item";
+      row.innerHTML = `
+        ${coverBlock(it.job_id, "dl-item-cover")}
+        <div class="dl-item-info"><div class="dl-item-title">${escapeHTML(it.title)}</div>
+          <div class="dl-item-sub">${it.total || "?"} frases · na fila</div></div>
+        <div class="dl-item-pos">${i === 0 ? "PRÓXIMO" : (i + 1) + "º"}</div>
+        <button class="dl-item-cancel" title="Remover da fila">✕</button>`;
+      row.querySelector(".dl-item-cancel").addEventListener("click", () => cancelPrep(it.job_id));
+      upWrap.appendChild(row);
+    });
+  }
+
   async function refreshQueue() {
     const btn = document.getElementById("btn-queue");
     const badge = document.getElementById("queue-badge");
-    const list = document.getElementById("queue-list");
     if (!btn) return;
     try {
       const q = await window.LeIA.api.getJSON("/api/pdf/queue");
@@ -380,30 +544,16 @@
         btn.classList.add("hidden");
         if (badge) badge.classList.add("hidden");
       }
-      if (list) {
-        list.innerHTML = items.length ? "" : `<div class="bm-empty">Nada na fila.</div>`;
-        items.forEach((it) => {
-          const pct = it.total ? Math.round((it.done / it.total) * 100) : 0;
-          const etaTxt = it.eta > 0 ? " · ~" + fmtDur(it.eta) : "";
-          const spd = it.rate > 0 ? " · " + Math.round(it.rate * 60) + " f/min" : "";
-          const statusTxt = it.status !== "preparing" ? "na fila"
-            : (it.done === 0 ? "carregando a voz…" : `${it.done}/${it.total} (${pct}%)${spd}${etaTxt}`);
-          const row = document.createElement("div");
-          row.className = "queue-item";
-          row.innerHTML = `<div class="queue-icon">${it.status === "preparing" ? `<div class="spinner"></div>` : "⏳"}</div>` +
-            `<div class="queue-meta"><div class="queue-title">${escapeHTML(it.title)}</div>` +
-            `<div class="queue-status">${statusTxt}</div></div>`;
-          list.appendChild(row);
-        });
-      }
-      // continua atualizando enquanto houver atividade na fila
+      if (isDownloadsOpen()) renderDownloads(items);
       if (queuePoll) { clearTimeout(queuePoll); queuePoll = null; }
-      if (items.length) queuePoll = setTimeout(refreshQueue, 2000);
+      // repolla mais rápido se a página de downloads está aberta
+      if (items.length) queuePoll = setTimeout(refreshQueue, isDownloadsOpen() ? 1200 : 2500);
     } catch {}
   }
 
   document.addEventListener("DOMContentLoaded", () => {
     window.LeIA.toast = toast;
+    window.LeIA.confirm = confirmDialog;
     window.LeIA.onBookAdded = onBookAdded;
     window.LeIA.openDoc = openDoc;
     window.LeIA.goHome = goHome;
@@ -423,21 +573,23 @@
     const si = document.getElementById("library-search");
     if (si) si.addEventListener("input", () => doSearch(si.value.trim()));
 
-    // popover da fila
-    const qbtn = document.getElementById("btn-queue");
-    const qpop = document.getElementById("queue-popover");
-    if (qbtn && qpop) {
-      qbtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const open = qpop.classList.toggle("open");
-        if (open) {
-          const rect = qbtn.getBoundingClientRect();
-          qpop.style.left = `${Math.max(8, rect.right - 320)}px`;
-          qpop.style.top = `${rect.bottom + 8}px`;
-        }
-      });
-      document.addEventListener("click", (e) => { if (!qpop.contains(e.target) && e.target !== qbtn) qpop.classList.remove("open"); });
+    // Modal de coleções
+    const colBd = document.getElementById("collection-backdrop");
+    if (colBd) {
+      const closeCol = () => colBd.classList.remove("open");
+      document.getElementById("collection-close").addEventListener("click", closeCol);
+      colBd.addEventListener("click", (e) => { if (e.target === colBd) closeCol(); });
+      const newInp = document.getElementById("collection-new-input");
+      const newBtn = document.getElementById("collection-new-btn");
+      newBtn.addEventListener("click", () => { if (newInp.value.trim()) assignCollection(newInp.value); });
+      newInp.addEventListener("keydown", (e) => { if (e.key === "Enter" && newInp.value.trim()) assignCollection(newInp.value); });
     }
+
+    // Botão da fila → abre a página de Downloads (estilo Steam)
+    const qbtn = document.getElementById("btn-queue");
+    if (qbtn) qbtn.addEventListener("click", (e) => { e.stopPropagation(); openDownloads(); });
+    const dlBack = document.getElementById("downloads-back");
+    if (dlBack) dlBack.addEventListener("click", closeDownloads);
 
     // Garante que o progresso vá pro disco ao fechar/minimizar a janela.
     window.addEventListener("pagehide", flushProgress);

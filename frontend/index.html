@@ -122,6 +122,25 @@
       </div>
     </section>
 
+    <!-- Downloads / Fila de narração (estilo Steam) -->
+    <section id="view-downloads" class="reader-scroll hidden">
+      <div class="downloads">
+        <div class="dl-head">
+          <button id="downloads-back" class="btn btn-ghost dl-back">← Estante</button>
+          <h1 class="dl-title">Fila de narração</h1>
+          <p class="dl-sub">A geração do áudio dos seus livros — um por vez, na sua GPU.</p>
+        </div>
+        <div id="dl-active" class="dl-active"></div>
+        <div id="dl-upnext-head" class="dl-upnext-head hidden">A seguir</div>
+        <div id="dl-upnext" class="dl-upnext"></div>
+        <div id="dl-empty" class="dl-empty hidden">
+          <div class="dl-empty-icon">🎧</div>
+          <div>Nenhuma narração sendo preparada agora.</div>
+          <small>Na estante, toque no 🎧 de um livro para preparar a narração.</small>
+        </div>
+      </div>
+    </section>
+
     <!-- Processing -->
     <section id="view-processing" class="reader-scroll hidden">
       <div class="processing">
@@ -177,7 +196,7 @@
       </div>
 
       <div class="player-controls">
-        <button id="btn-voice" class="btn btn-outline hidden" title="Voz">🎙 <span id="voice-label">Padrão</span></button>
+        <button id="btn-voice" class="btn btn-outline" title="Trocar a voz">🎙 <span id="voice-label">Ana</span></button>
         <button id="btn-speed" class="btn btn-outline" title="Velocidade (− / +)"><span id="speed-label">1.0x</span></button>
         <button id="btn-bookmark" class="btn-icon" title="Marcar esta posição (B)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z"/></svg>
@@ -221,12 +240,8 @@
   </div>
 
   <div id="voices-popover" class="popover voices-panel" style="bottom: calc(var(--player-h) + 8px);">
-    <div class="voices-panel-header">
-      <span>Vozes</span>
-      <button id="btn-upload-voice" class="btn btn-ghost" style="font-size:12px;">+ Nova</button>
-    </div>
+    <div class="voices-panel-header"><span>Vozes</span></div>
     <div id="voices-list"></div>
-    <input type="file" id="voice-file-input" accept="audio/wav,.wav" hidden />
   </div>
 
   <!-- Settings Modal -->
@@ -240,6 +255,7 @@
       </div>
       <div class="modal-tabs">
         <div class="modal-tab active" data-tab="appearance">Aparência</div>
+        <div class="modal-tab" data-tab="voice">Voz</div>
         <div class="modal-tab" data-tab="reading">Leitura</div>
         <div class="modal-tab" data-tab="stats">Estatísticas</div>
         <div class="modal-tab" data-tab="cleaning">Limpeza</div>
@@ -313,6 +329,10 @@
               <input type="range" class="range" id="bright-slider" min="20" max="100" value="100" />
             </div>
           </div>
+        </div>
+        <div class="modal-pane hidden" data-pane="voice">
+          <div class="voice-pane-intro">Escolha a voz da narração. Toque em ▶ para ouvir uma amostra. As recomendadas são a <b>Ana</b> e o <b>Damião</b>.</div>
+          <div id="voices-settings-list" class="voices-settings"></div>
         </div>
         <div class="modal-pane hidden" data-pane="reading">
           <div class="modal-row">
@@ -389,6 +409,39 @@
             <label class="prepare-toggle bd-prep"><input type="checkbox" id="bd-prepare" /> Já preparar a narração</label>
             <button id="bd-add" class="btn btn-primary bd-add">Adicionar à estante</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirmação genérica (ex.: remover livro) -->
+  <div id="confirm-backdrop" class="backdrop">
+    <div class="modal confirm-modal">
+      <div id="confirm-icon" class="confirm-icon">🗑️</div>
+      <div id="confirm-title" class="confirm-title">Tem certeza?</div>
+      <div id="confirm-msg" class="confirm-msg"></div>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="btn btn-outline">Cancelar</button>
+        <button id="confirm-ok" class="btn confirm-ok-btn">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coleções: mover livro / criar coleção -->
+  <div id="collection-backdrop" class="backdrop">
+    <div class="modal collection-modal">
+      <div class="modal-header">
+        <div class="modal-title">Adicionar a uma coleção</div>
+        <button id="collection-close" class="btn-icon" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.4L17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></svg>
+        </button>
+      </div>
+      <div class="collection-body">
+        <div id="collection-book" class="collection-book"></div>
+        <div id="collection-options" class="collection-options"></div>
+        <div class="collection-new">
+          <input id="collection-new-input" class="collection-new-input" type="text" placeholder="Criar nova coleção…" maxlength="40" autocomplete="off" />
+          <button id="collection-new-btn" class="btn btn-primary">Criar e adicionar</button>
         </div>
       </div>
     </div>

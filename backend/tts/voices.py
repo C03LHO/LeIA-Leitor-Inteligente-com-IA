@@ -1,23 +1,23 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
+from backend.config import USER_DATA_DIR
 from backend.utils.logging import get_logger
 
 logger = get_logger("tts.voices")
 
 PREVIEW_SENTENCE = (
-    "Olá, eu sou o LeIA. Vou ler seus PDFs com naturalidade, "
+    "Olá! Esta é a minha voz. Vou narrar os seus livros com calma e clareza, "
     "no ritmo que você preferir."
 )
-
-DEFAULT_VOICE_ID = "natural"
 
 
 @dataclass
 class Voice:
-    id: str
-    name: str
+    id: str          # nome do falante embutido do XTTS-v2
+    name: str        # rótulo curto exibido
     gender: str
     style: str
     description: str
@@ -35,22 +35,60 @@ class Voice:
         }
 
 
-# O Chatterbox tem uma única voz nativa (sem catálogo). É a que o LeIA usa.
-_NATURAL = Voice(
-    id=DEFAULT_VOICE_ID,
-    name="Padrão",
-    gender="—",
-    style="Natural",
-    description="Voz natural do LeIA",
-)
+# Catálogo curado de vozes do XTTS-v2 (falantes embutidos) para narração em
+# português. O `id` é o nome do falante que o XTTS usa internamente.
+# As duas RECOMENDADAS (as que você gostou) são a Ana e o Damião — ficam no topo;
+# as demais são opções secundárias.
+XTTS_VOICES: list[Voice] = [
+    Voice("Ana Florence", "Ana", "Feminina", "Clara e calma", "Recomendada. Feminina brasileira, ótima para leitura longa."),
+    Voice("Damien Black", "Damião", "Masculina", "Envolvente", "Recomendada. Masculina marcante, boa para ficção e suspense."),
+    Voice("Sofia Hellen", "Sofia", "Feminina", "Suave", "Feminina suave, tom acolhedor."),
+    Voice("Alma Maria", "Alma", "Feminina", "Expressiva", "Feminina expressiva, boa para ficção."),
+    Voice("Daisy Studious", "Daisy", "Feminina", "Séria", "Feminina séria, boa para não-ficção."),
+    Voice("Luis Moray", "Luís", "Masculina", "Firme", "Masculina firme e articulada."),
+    Voice("Dionisio Schuyler", "Dionísio", "Masculina", "Grave", "Masculina grave, tom de contador de histórias."),
+]
 
-EMBEDDED_VOICES: list[Voice] = [_NATURAL]
+# Ids das vozes recomendadas (destacadas na interface).
+RECOMMENDED_VOICE_IDS = ["Ana Florence", "Damien Black"]
+
+EMBEDDED_VOICES = XTTS_VOICES
+_VOICE_BY_ID = {v.id: v for v in XTTS_VOICES}
+
+DEFAULT_VOICE_ID = "Ana Florence"
+
+# Voz ativa persistida (sobrevive a reinício). Guardada em settings.json.
+_SETTINGS_PATH = USER_DATA_DIR / "settings.json"
 
 
 def all_voices() -> list[Voice]:
-    return list(EMBEDDED_VOICES)
+    return list(XTTS_VOICES)
 
 
 def resolve_voice(voice_id: str) -> Voice:
-    """Voz única: qualquer id (inclusive prefs antigas do XTTS) resolve para a padrão."""
-    return _NATURAL
+    """Devolve a voz pelo id; ids desconhecidos (ex.: 'natural' antigo) caem na padrão."""
+    return _VOICE_BY_ID.get(voice_id, _VOICE_BY_ID[DEFAULT_VOICE_ID])
+
+
+def get_active_voice_id() -> str:
+    try:
+        data = json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
+        vid = data.get("voice")
+        if vid in _VOICE_BY_ID:
+            return vid
+    except Exception:
+        pass
+    return DEFAULT_VOICE_ID
+
+
+def set_active_voice_id(voice_id: str) -> str:
+    vid = resolve_voice(voice_id).id
+    try:
+        data = {}
+        if _SETTINGS_PATH.exists():
+            data = json.loads(_SETTINGS_PATH.read_text(encoding="utf-8"))
+        data["voice"] = vid
+        _SETTINGS_PATH.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        logger.exception("Falha ao salvar a voz ativa")
+    return vid
