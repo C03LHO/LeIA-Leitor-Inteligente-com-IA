@@ -25,7 +25,9 @@ app.include_router(routes_voices.router)
 
 @app.get("/api")
 def api_root() -> dict[str, str]:
-    return {"status": "ok", "name": APP_NAME, "version": APP_VERSION}
+    from backend.config import TTS_ENGINE
+
+    return {"status": "ok", "name": APP_NAME, "version": APP_VERSION, "engine": TTS_ENGINE}
 
 
 if FRONTEND_DIR.exists() and (FRONTEND_DIR / "index.html").exists():

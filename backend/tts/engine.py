@@ -293,7 +293,14 @@ def wav_duration_seconds(wav_bytes: bytes) -> float:
 _engine: TTSEngine | None = None
 
 
-def get_engine() -> TTSEngine:
+def get_engine():
+    """Devolve o motor de narração conforme config.TTS_ENGINE ('xtts' | 'chatterbox')."""
+    from backend.config import TTS_ENGINE
+
+    if TTS_ENGINE == "xtts":
+        from backend.tts.xtts_engine import get_xtts_engine
+
+        return get_xtts_engine()
     global _engine
     if _engine is None:
         _engine = TTSEngine()

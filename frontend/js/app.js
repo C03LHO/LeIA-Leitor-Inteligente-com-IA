@@ -38,7 +38,8 @@
     if (!el) return;
     try {
       const info = await window.LeIA.api.getJSON("/api");
-      el.textContent = "v" + (info.version || "?");
+      const eng = info.engine === "xtts" ? " · voz XTTS-v2" : info.engine === "chatterbox" ? " · voz Chatterbox" : "";
+      el.textContent = "v" + (info.version || "?") + eng;
     } catch { el.textContent = ""; }
   }
 

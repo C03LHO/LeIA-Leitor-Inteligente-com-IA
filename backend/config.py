@@ -4,7 +4,13 @@ import os
 from pathlib import Path
 
 APP_NAME = "LeIA"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
+
+# Motor de narração: "xtts" (XTTS-v2, ~2GB VRAM, mais estável em placa lotada) ou
+# "chatterbox" (voz nativa pt-BR, ~5.6GB VRAM). Trocável por variável de ambiente.
+TTS_ENGINE = os.environ.get("LEIA_TTS_ENGINE", "xtts").strip().lower()
+# Falante embutido do XTTS-v2 para pt-BR (não precisa de áudio de referência).
+XTTS_SPEAKER = os.environ.get("LEIA_XTTS_SPEAKER", "Ana Florence")
 
 HOST = "127.0.0.1"
 DEFAULT_PORT = 8765

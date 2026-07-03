@@ -8,11 +8,14 @@ from backend.config import CACHE_DIR
 
 # Versão da síntese: muda quando os parâmetros/pós-processamento mudam, para
 # invalidar áudio antigo (com artefatos) sem precisar limpar manualmente.
-_SYNTH_VERSION = "v3"
+_SYNTH_VERSION = "v4"
 
 
 def audio_cache_path(text: str, voice: str, speed: float) -> Path:
-    key = f"{_SYNTH_VERSION}|{voice}|{speed:.3f}|{text}".encode("utf-8")
+    # Inclui o motor na chave → cada engine (xtts/chatterbox) tem cache próprio.
+    from backend.config import TTS_ENGINE
+
+    key = f"{_SYNTH_VERSION}|{TTS_ENGINE}|{voice}|{speed:.3f}|{text}".encode("utf-8")
     digest = hashlib.sha1(key).hexdigest()
     audio_dir = CACHE_DIR / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)

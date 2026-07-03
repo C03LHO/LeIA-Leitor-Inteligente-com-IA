@@ -22,6 +22,9 @@ nltk==3.8.1
 # Motor TTS: Chatterbox (Resemble AI) — licença MIT, wheel pré-compilado (py3-none-any),
 # instala SEM o compilador C++ da Microsoft. Voz nativa pt-BR via modelo multilíngue.
 chatterbox-tts==0.1.7
+# XTTS-v2 (coqui-tts, fork mantido idiap): ~2GB VRAM, mais estável em placa
+# lotada. Um shim em runtime repõe isin_mps_friendly p/ rodar com transformers 5.x.
+coqui-tts==0.27.5
 torch==2.6.0+cu124
 torchaudio==2.6.0+cu124
 
