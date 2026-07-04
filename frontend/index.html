@@ -225,6 +225,9 @@
         <button id="btn-download" class="btn-icon" title="Baixar áudio (WAV) da seção atual">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
         </button>
+        <button id="btn-audiobook" class="btn-icon" title="Audiolivro para o celular (iPhone)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+        </button>
       </div>
     </footer>
   </div>
@@ -468,6 +471,55 @@
     </div>
   </div>
 
+  <!-- Audiolivro para o celular (iPhone) -->
+  <div id="audiobook-backdrop" class="backdrop">
+    <div class="modal audiobook-modal">
+      <div class="modal-header">
+        <div class="modal-title">📱 Audiolivro para o celular</div>
+        <button id="audiobook-close" class="btn-icon" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="audiobook-body">
+        <div id="ab-book" class="ab-book"></div>
+
+        <!-- Etapa 1: escolher formato -->
+        <div id="ab-step-format" class="ab-step">
+          <div class="ab-label">Formato</div>
+          <div class="ab-formats">
+            <label class="ab-fmt active"><input type="radio" name="ab-fmt" value="m4b" checked>
+              <b>M4B</b><small>audiolivro com capítulos · ideal p/ o app Livros do iPhone</small></label>
+            <label class="ab-fmt"><input type="radio" name="ab-fmt" value="mp3">
+              <b>MP3</b><small>faixa única · toca em qualquer player</small></label>
+          </div>
+          <div class="ab-actions">
+            <button id="ab-download-btn" class="btn btn-outline">⬇ Baixar no computador</button>
+            <button id="ab-share-btn" class="btn btn-primary">📲 Enviar pro iPhone</button>
+          </div>
+          <p class="ab-hint">O áudio é gerado uma vez com a voz selecionada. Frases já narradas são reaproveitadas — quem já preparou a leitura exporta na hora.</p>
+        </div>
+
+        <!-- Etapa 2: progresso da geração -->
+        <div id="ab-step-progress" class="ab-step hidden">
+          <div class="ab-prog-title" id="ab-prog-title">Gerando audiolivro…</div>
+          <div class="dl-hero-bar"><div id="ab-prog-fill" class="dl-hero-fill" style="width:0%"></div></div>
+          <div id="ab-prog-line" class="ab-prog-line">Preparando…</div>
+        </div>
+
+        <!-- Etapa 3: QR / link para o celular -->
+        <div id="ab-step-share" class="ab-step hidden">
+          <div class="ab-qr-wrap"><img id="ab-qr" class="ab-qr" alt="QR do audiolivro"></div>
+          <div class="ab-share-info">
+            <div class="ab-share-title">Aponte a câmera do iPhone para o QR</div>
+            <div class="ab-share-sub">Ou abra no navegador do celular (mesma rede Wi-Fi):</div>
+            <a id="ab-share-url" class="ab-share-url" target="_blank" rel="noopener"></a>
+            <p class="ab-hint">Se o Windows perguntar, permita o acesso à rede. O link expira em 1 hora.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Coleções: mover livro / criar coleção -->
   <div id="collection-backdrop" class="backdrop">
     <div class="modal collection-modal">
@@ -502,6 +554,7 @@
   <script src="/static/js/books.js"></script>
   <script src="/static/js/player.js"></script>
   <script src="/static/js/find.js"></script>
+  <script src="/static/js/audiobook.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/app.js"></script>
 </body>

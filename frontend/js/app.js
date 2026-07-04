@@ -575,6 +575,7 @@
     window.LeIA.initUpload();
     window.LeIA.player.initPlayer();
     window.LeIA.find.init();
+    window.LeIA.audiobook.init();
     window.LeIA.voices.initVoices();
     window.LeIA.settings.initSettings();
 

@@ -17,7 +17,9 @@ from backend.config import CACHE_DIR
 from backend.epub.extractor import build_epub_document, extract_epub_cover
 from backend.pdf.cleaner import CleaningConfig
 from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author, render_cover
+from backend.audio.audiobook import audiobook_path, build_audiobook, ffmpeg_available
 from backend.pdf.ocr import ocr_available, ocr_pdf_blocks
+from backend.share.lan import start_share
 from backend.pdf.reflow import build_document
 from backend.text.extractor import build_docx_document, build_document_from_blocks, build_txt_document
 from backend.tts.engine import get_engine
@@ -562,6 +564,89 @@ def job_result(job_id: str):
     if _load_library().get(job_id):
         _library_put(job_id, last_opened=time.time())  # histórico de leitura
     return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
+
+
+# --------------------------------------------------------------------------- #
+# Audiolivro (exportar o livro inteiro como M4B/MP3) + enviar para o celular
+# --------------------------------------------------------------------------- #
+_export_jobs: dict[str, dict] = {}
+_export_lock = threading.Lock()
+
+
+class AudiobookRequest(BaseModel):
+    fmt: str = "m4b"
+
+
+def _run_export(job_id: str, fmt: str) -> None:
+    def progress(done: int, total: int) -> None:
+        j = _export_jobs.get(job_id)
+        if j is not None:
+            j["done"] = done
+            j["total"] = total
+
+    try:
+        path = build_audiobook(job_id, fmt=fmt, progress_cb=progress)
+        _export_jobs[job_id] = {"status": "done", "fmt": fmt, "path": str(path),
+                                "done": _export_jobs.get(job_id, {}).get("done", 0),
+                                "total": _export_jobs.get(job_id, {}).get("total", 0)}
+    except Exception as exc:
+        logger.exception("Falha ao exportar audiolivro (job %s)", job_id)
+        _export_jobs[job_id] = {"status": "error", "error": str(exc)}
+
+
+@router.post("/{job_id}/audiobook")
+def export_audiobook_start(job_id: str, req: AudiobookRequest):
+    if not pdf_result_path(job_id).exists():
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    if not ffmpeg_available():
+        raise HTTPException(status_code=400, detail="ffmpeg não está instalado — necessário para gerar o audiolivro.")
+    fmt = "mp3" if req.fmt == "mp3" else "m4b"
+    with _export_lock:
+        cur = _export_jobs.get(job_id)
+        if cur and cur.get("status") == "exporting":
+            return {"status": "exporting", "done": cur.get("done", 0), "total": cur.get("total", 0)}
+        _export_jobs[job_id] = {"status": "exporting", "fmt": fmt, "done": 0, "total": 0}
+    threading.Thread(target=_run_export, args=(job_id, fmt), daemon=True, name=f"leia-export-{job_id}").start()
+    return {"status": "exporting"}
+
+
+@router.get("/{job_id}/audiobook/status")
+def export_audiobook_status(job_id: str):
+    j = _export_jobs.get(job_id)
+    if j:
+        return j
+    for fmt in ("m4b", "mp3"):
+        p = audiobook_path(job_id, fmt)
+        if p.exists():
+            return {"status": "done", "fmt": fmt, "path": str(p)}
+    return {"status": "none"}
+
+
+@router.get("/{job_id}/audiobook/download")
+def export_audiobook_download(job_id: str):
+    for fmt, media in (("m4b", "audio/mp4"), ("mp3", "audio/mpeg")):
+        p = audiobook_path(job_id, fmt)
+        if p.exists():
+            title = _load_library().get(job_id, {}).get("title") or job_id
+            fname = f"{title}.{fmt}".replace("/", "_")
+            return FileResponse(str(p), media_type=media, filename=fname)
+    raise HTTPException(status_code=404, detail="Audiolivro ainda não gerado")
+
+
+@router.post("/{job_id}/share")
+def share_audiobook(job_id: str, req: AudiobookRequest):
+    fmt = "mp3" if req.fmt == "mp3" else "m4b"
+    p = audiobook_path(job_id, fmt)
+    if not p.exists():
+        raise HTTPException(status_code=409, detail="Gere o audiolivro antes de enviar para o celular.")
+    title = _load_library().get(job_id, {}).get("title") or Path(job_id).stem
+    filename = f"{title}.{fmt}".replace("/", "_")
+    try:
+        info = start_share(p, title=title, filename=filename)
+    except Exception as exc:
+        logger.exception("Falha ao iniciar compartilhamento (job %s)", job_id)
+        raise HTTPException(status_code=500, detail=str(exc))
+    return info
 
 
 class ProgressBody(BaseModel):

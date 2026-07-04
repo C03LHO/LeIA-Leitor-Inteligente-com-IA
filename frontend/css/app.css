@@ -1532,4 +1532,39 @@ select:focus-visible {
   .find-input { width: 150px; }
 }
 
+/* ============================================================
+   Fase D — Audiolivro para o celular (iPhone)
+   ============================================================ */
+.audiobook-modal { max-width: 460px; width: 92%; }
+.audiobook-body { padding: var(--space-5); }
+.ab-book { font-size: 15px; font-weight: 700; color: var(--fg-primary); margin-bottom: var(--space-4); }
+.ab-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-tertiary); margin-bottom: var(--space-2); }
+.ab-formats { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-5); }
+.ab-fmt {
+  display: block; padding: 12px 14px; border-radius: var(--radius-md);
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle); cursor: pointer;
+  transition: border-color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
+}
+.ab-fmt.active { border-color: var(--accent); background: var(--accent-muted); }
+.ab-fmt input { display: none; }
+.ab-fmt b { font-size: 14px; color: var(--fg-primary); }
+.ab-fmt small { display: block; font-size: 12px; color: var(--fg-tertiary); margin-top: 2px; }
+.ab-actions { display: flex; gap: var(--space-3); }
+.ab-actions .btn { flex: 1; }
+.ab-hint { font-size: 11.5px; line-height: 1.5; color: var(--fg-tertiary); margin: var(--space-4) 0 0; }
+
+.ab-prog-title { font-size: 15px; font-weight: 600; margin-bottom: var(--space-3); text-align: center; }
+.ab-prog-line { font-size: 13px; color: var(--fg-secondary); text-align: center; margin-top: var(--space-2); }
+#ab-step-progress .dl-hero-bar { margin: 0 auto; max-width: 340px; }
+
+.ab-qr-wrap { display: flex; justify-content: center; margin-bottom: var(--space-4); }
+.ab-qr { width: 200px; height: 200px; border-radius: var(--radius-md); background: #fff; padding: 10px; }
+.ab-share-info { text-align: center; }
+.ab-share-title { font-size: 15px; font-weight: 600; color: var(--fg-primary); }
+.ab-share-sub { font-size: 12.5px; color: var(--fg-secondary); margin-top: var(--space-2); }
+.ab-share-url {
+  display: inline-block; margin-top: var(--space-2); font-family: var(--font-mono); font-size: 13px;
+  color: var(--accent); word-break: break-all; padding: 6px 10px; background: var(--accent-muted); border-radius: var(--radius-sm);
+}
+
 .hidden { display: none !important; }
