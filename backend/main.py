@@ -129,6 +129,14 @@ def main(open_browser: bool = False, window: bool = False) -> None:
     except Exception:
         pass
     setup_logging()
+    # Detecta a GPU AGORA (antes de servir/sintetizar) e cacheia — assim
+    # /api/system/status nunca trava consultando a CUDA durante a narração.
+    try:
+        from backend.tts.engine import detect_hardware
+
+        detect_hardware()
+    except Exception:
+        pass
     port = _pick_port()
     url = f"http://{HOST}:{port}"
     print(f"[{APP_NAME}] subindo em {url}")

@@ -45,22 +45,36 @@ class HardwareInfo:
         }
 
 
+_HARDWARE: "HardwareInfo | None" = None
+_CPU = HardwareInfo(device="cpu", gpu_name=None, vram_mb=None, cuda_available=False)
+
+
 def detect_hardware() -> HardwareInfo:
+    """Detecta a GPU UMA vez e cacheia. As chamadas CUDA (get_device_name/
+    properties) podem BLOQUEAR se rodadas enquanto a GPU está sintetizando —
+    por isso nunca reconsultamos: /api/system/status fica instantâneo."""
+    global _HARDWARE
+    if _HARDWARE is not None:
+        return _HARDWARE
     try:
         import torch
+
+        if torch.cuda.is_available():
+            idx = torch.cuda.current_device()
+            name = torch.cuda.get_device_name(idx)
+            props = torch.cuda.get_device_properties(idx)
+            _HARDWARE = HardwareInfo(
+                device="cuda",
+                gpu_name=name,
+                vram_mb=int(props.total_memory / (1024 * 1024)),
+                cuda_available=True,
+            )
+        else:
+            _HARDWARE = _CPU
     except Exception:
-        return HardwareInfo(device="cpu", gpu_name=None, vram_mb=None, cuda_available=False)
-    if torch.cuda.is_available():
-        idx = torch.cuda.current_device()
-        name = torch.cuda.get_device_name(idx)
-        props = torch.cuda.get_device_properties(idx)
-        return HardwareInfo(
-            device="cuda",
-            gpu_name=name,
-            vram_mb=int(props.total_memory / (1024 * 1024)),
-            cuda_available=True,
-        )
-    return HardwareInfo(device="cpu", gpu_name=None, vram_mb=None, cuda_available=False)
+        logger.exception("Falha ao detectar hardware; assumindo CPU")
+        _HARDWARE = _CPU
+    return _HARDWARE
 
 
 def _tune_perf() -> None:
