@@ -74,6 +74,26 @@
       const eng = info.engine === "xtts" ? " · voz XTTS-v2" : info.engine === "chatterbox" ? " · voz Chatterbox" : "";
       el.textContent = "v" + (info.version || "?") + eng;
     } catch { el.textContent = ""; }
+    checkForUpdate();
+  }
+
+  async function checkForUpdate() {
+    const el = document.getElementById("app-version");
+    if (!el) return;
+    try {
+      const u = await window.LeIA.api.getJSON("/api/system/update-check");
+      if (!u.update_available) return;
+      const link = document.createElement("button");
+      link.className = "update-link";
+      link.textContent = `🔔 atualização disponível (v${u.latest})`;
+      link.title = "Abrir o projeto no GitHub para baixar a nova versão";
+      link.addEventListener("click", () => {
+        window.LeIA.api.postJSON("/api/system/open-repo", {}).catch(() => {});
+      });
+      el.appendChild(document.createTextNode("  ·  "));
+      el.appendChild(link);
+      toast(`Nova versão disponível: v${u.latest}`, "info");
+    } catch {}
   }
 
   async function refreshHardwareBadge() {
@@ -572,6 +592,7 @@
     window.LeIA.saveProgress = saveProgress;
 
     window.LeIA.shortcuts.init();
+    window.LeIA.a11y.init();
     window.LeIA.initUpload();
     window.LeIA.player.initPlayer();
     window.LeIA.find.init();
