@@ -20,6 +20,7 @@ from backend.config import XTTS_SPEAKER
 from backend.tts.engine import (
     SAMPLE_RATE,
     _empty_cache,
+    _is_speakable_text,
     _sanitize_text,
     _silence_wav,
     _to_mono_float,
@@ -229,7 +230,7 @@ class XTTSEngine:
         self.ensure_loaded()
         speaker = resolve_voice(voice_id).id  # id do catálogo = falante do XTTS
         clean = _sanitize_text(text)
-        if sum(ch.isalpha() for ch in clean) < 2:
+        if not _is_speakable_text(text, clean):
             return _silence_wav(0.18)
         with self._synth_lock:
             try:

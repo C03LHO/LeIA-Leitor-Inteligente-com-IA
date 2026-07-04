@@ -1490,4 +1490,46 @@ select:focus-visible {
   .popover-item:active, .modal-tab:active { transform: none; }
 }
 
+/* ============================================================
+   Fase B — Timer de sono + busca no livro
+   ============================================================ */
+#btn-sleep { position: relative; }
+#btn-sleep.active { color: var(--accent); }
+.sleep-badge {
+  position: absolute; bottom: 0; right: 0;
+  min-width: 15px; height: 14px; padding: 0 3px;
+  background: var(--accent); color: var(--bg-canvas);
+  border-radius: var(--radius-pill); font-size: 8.5px; font-weight: 700;
+  display: grid; place-items: center; line-height: 1;
+}
+
+.find-bar {
+  position: fixed; top: calc(var(--topbar-h) + 8px); right: var(--space-5);
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px; z-index: 250;
+  background: var(--bg-elevated); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+  animation: findIn var(--t-base) var(--ease);
+}
+@keyframes findIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+.find-ico { width: 16px; height: 16px; color: var(--fg-tertiary); flex-shrink: 0; }
+.find-input {
+  width: 220px; height: 30px; padding: 0 8px;
+  background: var(--bg-surface); border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm); color: var(--fg-primary); font-size: 13px; outline: none;
+}
+.find-input:focus { border-color: var(--accent); }
+.find-count { font-family: var(--font-mono); font-size: 11px; color: var(--fg-tertiary); min-width: 36px; text-align: center; }
+.find-bar .btn-icon { width: 30px; height: 30px; }
+.find-bar .btn-icon svg { width: 15px; height: 15px; }
+
+/* Realce das ocorrências da busca (distinto do highlight de narração) */
+.sentence.find-hit { background: rgba(245, 158, 11, 0.18); border-radius: var(--radius-sm); }
+.sentence.find-current { background: var(--accent); color: var(--bg-canvas); border-radius: var(--radius-sm); }
+
+@media (max-width: 760px) {
+  .find-bar { right: var(--space-3); }
+  .find-input { width: 150px; }
+}
+
 .hidden { display: none !important; }

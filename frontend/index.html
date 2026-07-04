@@ -51,6 +51,9 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
         </button>
+        <button id="btn-find" class="btn-icon hidden" title="Buscar no livro (Ctrl+F)" aria-label="Buscar no livro">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        </button>
         <button id="btn-close-doc" class="btn btn-ghost hidden">Fechar</button>
         <span id="hw-badge" class="pill"><span class="dot"></span><span class="text">detectando…</span></span>
       </div>
@@ -74,17 +77,17 @@
       <div class="welcome">
         <div class="welcome-logo">L</div>
         <h1 class="welcome-title">LeIA</h1>
-        <p class="welcome-sub">Arraste seus livros (PDF ou EPUB) aqui — pode soltar vários de uma vez</p>
+        <p class="welcome-sub">Arraste seus livros (PDF, EPUB, DOCX ou TXT) aqui — pode soltar vários de uma vez</p>
         <div id="dropzone" class="dropzone">
           <div class="dropzone-icon">📄</div>
           <div class="dropzone-title">Solte os arquivos aqui</div>
           <div class="dropzone-sub">ou clique para procurar (um ou vários)</div>
-          <input type="file" id="file-input" accept=".pdf,.epub,application/pdf,application/epub+zip" multiple hidden />
+          <input type="file" id="file-input" accept=".pdf,.epub,.docx,.txt,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain" multiple hidden />
         </div>
         <label class="prepare-toggle" title="Sem marcar, o livro entra só como texto. A narração roda quando você der play, ou quando preparar pelo 🎧 na estante.">
           <input type="checkbox" id="prepare-on-add" /> Já preparar a narração ao adicionar (opcional — pesa no armazenamento)
         </label>
-        <div class="welcome-foot">Aceita .pdf e .epub · qualquer tamanho · 100% local · sem internet</div>
+        <div class="welcome-foot">Aceita .pdf, .epub, .docx e .txt · qualquer tamanho · 100% local · sem internet</div>
         <button id="btn-explore-welcome" class="explore-cta">
           <span class="explore-cta-globe">🌐</span>
           <span><b>Descobrir livros grátis</b><small>Populares e por gênero · Gutenberg · Wikisource · Internet Archive</small></span>
@@ -215,6 +218,10 @@
         <button id="btn-volume" class="btn-icon" title="Volume (↑ ↓ M)">
           <svg id="icon-volume" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/></svg>
         </button>
+        <button id="btn-sleep" class="btn-icon" title="Timer de sono">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+          <span id="sleep-badge" class="sleep-badge hidden"></span>
+        </button>
         <button id="btn-download" class="btn-icon" title="Baixar áudio (WAV) da seção atual">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
         </button>
@@ -235,6 +242,32 @@
   <div id="volume-popover" class="popover volume-popover" style="bottom: calc(var(--player-h) + 8px);">
     <input type="range" id="volume-slider" class="volume-slider" min="0" max="100" value="100" />
     <span class="volume-value" id="volume-value">100</span>
+  </div>
+
+  <div id="sleep-popover" class="popover" style="bottom: calc(var(--player-h) + 8px);">
+    <div class="popover-item" data-sleep="0">Desligado</div>
+    <div class="popover-item" data-sleep="5">5 minutos</div>
+    <div class="popover-item" data-sleep="15">15 minutos</div>
+    <div class="popover-item" data-sleep="30">30 minutos</div>
+    <div class="popover-item" data-sleep="45">45 minutos</div>
+    <div class="popover-item" data-sleep="60">1 hora</div>
+    <div class="popover-item" data-sleep="chapter">Fim do capítulo</div>
+  </div>
+
+  <!-- Barra de busca no livro -->
+  <div id="find-bar" class="find-bar hidden">
+    <svg class="find-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input id="find-input" class="find-input" type="text" placeholder="Buscar no livro…" autocomplete="off" spellcheck="false" />
+    <span id="find-count" class="find-count">0/0</span>
+    <button id="find-prev" class="btn-icon" title="Anterior (Shift+Enter)" aria-label="Resultado anterior">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+    </button>
+    <button id="find-next" class="btn-icon" title="Próximo (Enter)" aria-label="Próximo resultado">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button id="find-close" class="btn-icon" title="Fechar (Esc)" aria-label="Fechar busca">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
   </div>
 
   <div id="queue-popover" class="popover queue-panel">
@@ -468,6 +501,7 @@
   <script src="/static/js/stats.js"></script>
   <script src="/static/js/books.js"></script>
   <script src="/static/js/player.js"></script>
+  <script src="/static/js/find.js"></script>
   <script src="/static/js/settings.js"></script>
   <script src="/static/js/app.js"></script>
 </body>

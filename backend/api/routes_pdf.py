@@ -17,14 +17,16 @@ from backend.config import CACHE_DIR
 from backend.epub.extractor import build_epub_document, extract_epub_cover
 from backend.pdf.cleaner import CleaningConfig
 from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author, render_cover
+from backend.pdf.ocr import ocr_available, ocr_pdf_blocks
 from backend.pdf.reflow import build_document
+from backend.text.extractor import build_docx_document, build_document_from_blocks, build_txt_document
 from backend.tts.engine import get_engine
 from backend.tts.streamer import get_or_synthesize
 from backend.tts.voices import DEFAULT_VOICE_ID, all_voices, get_active_voice_id
 from backend.utils.logging import get_logger
 from backend.utils.paths import audio_cache_path, book_upload_path, pdf_result_path
 
-SUPPORTED_EXTS = (".pdf", ".epub")
+SUPPORTED_EXTS = (".pdf", ".epub", ".txt", ".docx")
 
 logger = get_logger("api.pdf")
 router = APIRouter(prefix="/api/pdf", tags=["pdf"])
@@ -314,8 +316,9 @@ def _make_cover(src_path: Path, ext: str, job_id: str) -> None:
     try:
         if ext == ".epub":
             extract_epub_cover(src_path, _cover_path(job_id))
-        else:
+        elif ext == ".pdf":
             render_cover(src_path, _cover_path(job_id))
+        # .txt / .docx não têm capa — o cartão usa o ícone padrão.
     except Exception:
         logger.exception("Falha ao gerar capa (job %s)", job_id)
 
@@ -332,12 +335,29 @@ def _process_book(
         _jobs[job_id] = {"status": "processing", "progress": 0.1, "filename": filename}
         if ext == ".epub":
             result = build_epub_document(src_path, filename)
-        else:
+        elif ext == ".txt":
+            result = build_txt_document(src_path, filename)
+        elif ext == ".docx":
+            result = build_docx_document(src_path, filename)
+        else:  # .pdf
             blocks = extract_blocks(src_path)
             _jobs[job_id]["progress"] = 0.6
             result = build_document(blocks, str(src_path), filename, cfg)
             result["metadata"]["author"] = pdf_author(src_path)
             result["raw_blocks_sample"] = blocks_as_jsonable(blocks[:20])
+            # PDF só-imagem (escaneado): quase nada de texto selecionável.
+            if result["metadata"].get("extracted_chars", 0) < 20:
+                ocr_blocks = ocr_pdf_blocks(src_path)  # None se Tesseract ausente
+                if ocr_blocks:
+                    _jobs[job_id]["progress"] = 0.85
+                    result = build_document_from_blocks(ocr_blocks, filename, pages=result["metadata"].get("pages", 1))
+                    result["metadata"]["author"] = pdf_author(src_path)
+                elif not ocr_available():
+                    raise RuntimeError(
+                        "Este PDF parece ser uma imagem escaneada (sem texto selecionável). "
+                        "Para narrá-lo, instale o Tesseract OCR com o idioma português, "
+                        "ou use uma versão do livro com texto."
+                    )
         result_path = pdf_result_path(job_id)
         result_path.write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
         _jobs[job_id] = {

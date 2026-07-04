@@ -14,6 +14,12 @@ from backend.utils.logging import get_logger
 
 logger = get_logger("tts.engine")
 
+try:
+    from backend.tts.normalize_ptbr import normalize as _normalize_ptbr
+except Exception:  # num2words ausente → segue sem expandir números
+    def _normalize_ptbr(t: str) -> str:
+        return t
+
 # Chatterbox Multilingual gera áudio em 24 kHz mono.
 SAMPLE_RATE = 24000
 LANGUAGE_ID = "pt"
@@ -157,7 +163,7 @@ class TTSEngine:
         # Texto sem conteúdo falável (ex.: "4.", "(1)", "5–6.") faz o Chatterbox
         # disparar um device-side assert que ENVENENA o contexto CUDA (toda síntese
         # seguinte falha). Então nem chamamos o modelo: devolvemos um silêncio curto.
-        if sum(ch.isalpha() for ch in clean) < 2:
+        if not _is_speakable_text(text, clean):
             return _silence_wav(0.18)
         with self._synth_lock:
             try:
@@ -231,6 +237,9 @@ def _sanitize_text(text: str) -> str:
     t = unicodedata.normalize("NFC", text or "")
     t = re.sub(r"https?://\S+|www\.\S+", " ", t)   # URLs leem horrível
     t = re.sub(r"\S+@\S+\.\w+", " ", t)             # e-mails
+    # Números/abreviações por extenso ANTES de descartar símbolos (ainda vê
+    # R$, %, º): "R$ 45,90" -> "quarenta e cinco reais...", "séc. XIX" -> "...".
+    t = _normalize_ptbr(t)
     t = "".join(_CHAR_MAP.get(ch, ch) for ch in t)
     t = "".join(ch if _is_speakable_char(ch) else " " for ch in t)
     t = re.sub(r"\s+", " ", t)
@@ -238,6 +247,21 @@ def _sanitize_text(text: str) -> str:
     t = re.sub(r"([.,;:!?])\1+", r"\1", t)          # pontuação repetida → uma
     t = re.sub(r"\(\s*\)", " ", t)                   # parênteses vazios
     return re.sub(r"\s+", " ", t).strip()[:800]
+
+
+# Fragmento formado só por número + pontuação (nº de página, enumerador solto
+# como "4.", "(1)", "5–6."). Nesses casos NÃO narramos — evita "quatro" solto no
+# meio do livro. Exceção: quantidades marcadas (R$, %), que fazem sentido falar.
+_BARE_MARKER_RE = re.compile(r"^[\s\d.,;:()\[\]\-–—…º°ª/*]+$")
+
+
+def _is_speakable_text(raw: str, clean: str) -> bool:
+    """False para texto degenerado (só símbolos/escrita estrangeira → vira vazio)
+    ou fragmento só-número/marcador solto."""
+    t = (raw or "").strip()
+    if t and "%" not in t and "R$" not in t and _BARE_MARKER_RE.match(t):
+        return False
+    return sum(ch.isalpha() for ch in clean) >= 2
 
 
 def _silence_wav(seconds: float = 0.18) -> bytes:

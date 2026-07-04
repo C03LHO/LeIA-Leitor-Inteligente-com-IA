@@ -49,7 +49,7 @@
 
   function isBook(file) {
     const n = ((file && file.name) || "").toLowerCase();
-    return n.endsWith(".pdf") || n.endsWith(".epub");
+    return n.endsWith(".pdf") || n.endsWith(".epub") || n.endsWith(".docx") || n.endsWith(".txt");
   }
 
   function init() {
@@ -116,7 +116,7 @@
     async function handleMany(fileList) {
       const files = [...(fileList || [])].filter(isBook);
       if (!files.length) {
-        window.LeIA.toast("Envie arquivos .pdf ou .epub", "warning");
+        window.LeIA.toast("Envie arquivos .pdf, .epub, .docx ou .txt", "warning");
         return;
       }
       let ok = 0;

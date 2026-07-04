@@ -169,6 +169,7 @@
       currentJobId = jobId;
       window.LeIA.currentJobId = jobId;
       window.LeIA.reader.renderDocument(doc);
+      if (window.LeIA.player.onDocOpen) window.LeIA.player.onDocOpen(jobId);
       let saved = parseInt(localStorage.getItem(`leia.progress.${jobId}`) || "-1", 10);
       // O servidor guarda o progresso em disco — usa o mais avançado dos dois.
       try {
@@ -573,6 +574,7 @@
     window.LeIA.shortcuts.init();
     window.LeIA.initUpload();
     window.LeIA.player.initPlayer();
+    window.LeIA.find.init();
     window.LeIA.voices.initVoices();
     window.LeIA.settings.initSettings();
 

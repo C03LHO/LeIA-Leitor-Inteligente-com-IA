@@ -12,6 +12,7 @@ from backend.tts.streamer import merge_enumerators, split_sentences
 from backend.tts.voices import (
     DEFAULT_VOICE_ID,
     EMBEDDED_VOICES,
+    RECOMMENDED_VOICE_IDS,
     all_voices,
     resolve_voice,
 )
@@ -23,10 +24,12 @@ def test_detect_hardware_returns_struct():
     assert isinstance(hw.cuda_available, bool)
 
 
-def test_single_native_voice():
-    assert len(EMBEDDED_VOICES) == 1
-    assert EMBEDDED_VOICES[0].id == DEFAULT_VOICE_ID
-    assert len(all_voices()) == 1
+def test_voice_catalog():
+    # Catálogo XTTS: várias vozes embutidas; a padrão existe e é recomendada.
+    ids = [v.id for v in all_voices()]
+    assert len(EMBEDDED_VOICES) >= 1
+    assert DEFAULT_VOICE_ID in ids
+    assert DEFAULT_VOICE_ID in RECOMMENDED_VOICE_IDS
 
 
 def test_resolve_voice_default():
@@ -62,15 +65,16 @@ def test_merge_enumerators_joins_lone_markers():
 
 def test_sanitize_keeps_clean_portuguese():
     assert _sanitize_text("O menino correu para casa.") == "O menino correu para casa."
-    assert _sanitize_text("1º lugar e 3ª posição") == "1º lugar e 3ª posição"
+    # Ordinais são lidos por extenso (números por extenso, Fase A).
+    assert _sanitize_text("1º lugar e 3ª posição") == "primeiro lugar e terceira posição"
 
 
 def test_sanitize_strips_shapes_and_symbols():
     # Formas geométricas soltas → nada falável.
     assert _sanitize_text("◆ ■ ● ▲ ○ ►") == ""
     # Formas no meio da frase são removidas, o texto continua legível.
-    assert _sanitize_text("Capítulo ■ 1: A ● chegada") == "Capítulo 1: A chegada"
-    assert _sanitize_text("★★★ 5 estrelas") == "5 estrelas"
+    assert _sanitize_text("Capítulo ■ 1: A ● chegada") == "Capítulo um: A chegada"
+    assert _sanitize_text("★★★ 5 estrelas") == "cinco estrelas"
 
 
 def test_sanitize_strips_foreign_scripts():

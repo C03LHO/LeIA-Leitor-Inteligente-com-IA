@@ -311,10 +311,21 @@
 
   function setSpeed(value) {
     state.speed = value;
-    savePref("leia.speed", value);
+    savePref("leia.speed", value); // padrão global (último usado)
+    const jid = window.LeIA.currentJobId;
+    if (jid != null) savePref("leia.speed." + jid, value); // lembrada por livro
     document.getElementById("speed-label").textContent = value.toFixed(2).replace(/0$/,'') + "x";
     // Velocidade é playbackRate no navegador → muda ao vivo, sem re-sintetizar.
     if (state.audio) state.audio.playbackRate = value;
+  }
+
+  // Ao abrir um livro: aplica a velocidade lembrada dele (ou a global) e zera
+  // qualquer timer de sono pendente.
+  function onDocOpen(jobId) {
+    let v = parseFloat(localStorage.getItem("leia.speed." + jobId));
+    if (isNaN(v)) v = state.speed;
+    setSpeed(v);
+    clearSleep(true);
   }
 
   function bumpSpeed(delta) {
@@ -472,6 +483,64 @@
     });
   }
 
+  // ---------- Timer de sono ----------
+  let sleepTicker = null, sleepDeadline = 0, sleepChapterStart = null;
+
+  function clearSleep() {
+    if (sleepTicker) { clearInterval(sleepTicker); sleepTicker = null; }
+    sleepDeadline = 0; sleepChapterStart = null;
+    const badge = document.getElementById("sleep-badge");
+    if (badge) { badge.classList.add("hidden"); badge.textContent = ""; }
+    const btn = document.getElementById("btn-sleep");
+    if (btn) btn.classList.remove("active");
+  }
+
+  function fireSleep() {
+    clearSleep();
+    stop();               // mantém a posição (keepHighlight = true por padrão)
+    saveProgress();
+    window.LeIA.toast("Narração pausada — timer de sono", "info");
+  }
+
+  function tickSleep() {
+    const badge = document.getElementById("sleep-badge");
+    if (sleepChapterStart != null) {
+      const cur = currentSentence();
+      if (cur && cur.sectionIndex > sleepChapterStart) fireSleep();
+      return;
+    }
+    const remain = sleepDeadline - Date.now();
+    if (remain <= 0) { fireSleep(); return; }
+    if (badge) {
+      const m = Math.floor(remain / 60000), s = Math.floor((remain % 60000) / 1000);
+      badge.textContent = m > 0 ? `${m}m` : `${s}s`;
+    }
+  }
+
+  function setSleep(value) {
+    clearSleep();
+    const badge = document.getElementById("sleep-badge");
+    const btn = document.getElementById("btn-sleep");
+    if (value === "0" || value === 0) { window.LeIA.toast("Timer de sono desligado", "info"); return; }
+    if (value === "chapter") {
+      const cur = currentSentence();
+      sleepChapterStart = cur ? cur.sectionIndex : 0;
+      sleepTicker = setInterval(tickSleep, 1000);
+      if (btn) btn.classList.add("active");
+      if (badge) { badge.textContent = "cap"; badge.classList.remove("hidden"); }
+      window.LeIA.toast("Vai parar no fim do capítulo", "info");
+      return;
+    }
+    const mins = parseInt(value, 10);
+    if (!mins) return;
+    sleepDeadline = Date.now() + mins * 60000;
+    sleepTicker = setInterval(tickSleep, 1000);
+    if (btn) btn.classList.add("active");
+    if (badge) badge.classList.remove("hidden");
+    tickSleep();
+    window.LeIA.toast(`Timer de sono: ${mins} min`, "info");
+  }
+
   function bindPopover(button, popover) {
     function close() { popover.classList.remove("open"); }
     function open() {
@@ -528,6 +597,16 @@
       });
     });
 
+    // Sleep timer popover
+    const sleepPop = document.getElementById("sleep-popover");
+    bindPopover(document.getElementById("btn-sleep"), sleepPop);
+    sleepPop.querySelectorAll(".popover-item").forEach((it) => {
+      it.addEventListener("click", () => {
+        setSleep(it.dataset.sleep);
+        sleepPop.classList.remove("open");
+      });
+    });
+
     // Volume popover
     const volBtn = document.getElementById("btn-volume");
     const volPop = document.getElementById("volume-popover");
@@ -561,6 +640,6 @@
   window.LeIA.player = {
     initPlayer, stop, toggle, jumpToSentence, moveSentence, moveSection,
     setSpeed, setVoice, setVolume, toggleMute, setReady, restorePosition, currentIndex,
-    renderBookmarks, state,
+    renderBookmarks, setSleep, onDocOpen, state,
   };
 })();
