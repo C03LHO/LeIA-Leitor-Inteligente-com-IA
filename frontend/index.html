@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>LeIA — Leitor Inteligente com IA</title>
   <script>try{if(localStorage.getItem('leia.theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
+  <script>
+    // Reporta erros de JS ao servidor (diagnóstico — some no log do app).
+    (function(){
+      function rep(m){ try{ navigator.sendBeacon('/api/clientlog', String(m).slice(0,500)); }catch(_){ } }
+      window.addEventListener('error', function(e){ rep('ERROR: '+(e.message||'')+' @ '+((e.filename||'').split('/').pop())+':'+(e.lineno||'')); });
+      window.addEventListener('unhandledrejection', function(e){ rep('REJECT: '+((e.reason&&e.reason.message)||e.reason||'')); });
+    })();
+  </script>
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg" />
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />

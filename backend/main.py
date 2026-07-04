@@ -7,15 +7,29 @@ import time
 import webbrowser
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api import routes_books, routes_pdf, routes_system, routes_tts, routes_voices
 from backend.config import APP_NAME, APP_VERSION, FRONTEND_DIR, HOST, PORT_RANGE
-from backend.utils.logging import setup_logging
+from backend.utils.logging import get_logger, setup_logging
 
+logger = get_logger("main")
 app = FastAPI(title=APP_NAME, version=APP_VERSION)
+
+
+@app.middleware("http")
+async def _no_cache_static(request: Request, call_next):
+    """Nunca cacheia os arquivos do front (o WebView2 do app guardava versão
+    antiga e a tela não carregava). Sempre serve o mais novo."""
+    response = await call_next(request)
+    p = request.url.path
+    if p.startswith("/static") or p == "/":
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+    return response
+
+
 app.include_router(routes_system.router)
 app.include_router(routes_pdf.router)
 app.include_router(routes_books.router)
@@ -28,6 +42,17 @@ def api_root() -> dict[str, str]:
     from backend.config import TTS_ENGINE
 
     return {"status": "ok", "name": APP_NAME, "version": APP_VERSION, "engine": TTS_ENGINE}
+
+
+@app.post("/api/clientlog")
+async def clientlog(request: Request):
+    """Recebe erros de JS do front (diagnóstico do WebView2)."""
+    try:
+        body = (await request.body()).decode("utf-8", "replace")[:600]
+        logger.warning("CLIENT-JS: %s", body)
+    except Exception:
+        pass
+    return {"ok": True}
 
 
 if FRONTEND_DIR.exists() and (FRONTEND_DIR / "index.html").exists():
