@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "LeIA"
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.6.1"
 
 # Motor de narração: "xtts" (XTTS-v2, ~2GB VRAM, mais estável em placa lotada) ou
 # "chatterbox" (voz nativa pt-BR, ~5.6GB VRAM). Trocável por variável de ambiente.

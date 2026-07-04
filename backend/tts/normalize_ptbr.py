@@ -127,6 +127,13 @@ def _num_str_to_words(num: str) -> str:
     return _card(int(digits))
 
 
+# Operadores matemáticos ENTRE números viram palavras (senão "2 + 2 = 4" some).
+# Só entre dígitos → não afeta "C++", "a < b" nem hífen de palavras.
+_RE_PLUS = re.compile(r"(?<=\d)\s*\+\s*(?=\d)")
+_RE_EQUALS = re.compile(r"(?<=\d)\s*=\s*(?=\d)")
+_RE_TIMES = re.compile(r"(?<=\d)\s*[x×]\s*(?=\d)")
+_RE_MINUS = re.compile(r"(?<=\d)\s*[−]\s*(?=\d)")  # só o "menos" tipográfico U+2212
+
 _RE_PERCENT = re.compile(r"(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:,\d+)?)\s?%")
 _RE_TIME = re.compile(r"\b(\d{1,2})h(\d{2})?\b")
 # Não trata como ordinal quando é temperatura (30°C, 98°F) — aí o "°" vira
@@ -188,5 +195,10 @@ def normalize(text: str) -> str:
     t = _RE_PERCENT.sub(_sub_percent, t)
     t = _RE_TIME.sub(_sub_time, t)
     t = _RE_ORDINAL.sub(_sub_ordinal, t)
+    # operadores matemáticos entre números → palavra (antes de expandir os números)
+    t = _RE_PLUS.sub(" mais ", t)
+    t = _RE_EQUALS.sub(" igual ", t)
+    t = _RE_TIMES.sub(" vezes ", t)
+    t = _RE_MINUS.sub(" menos ", t)
     t = _RE_NUMBER.sub(lambda m: _num_str_to_words(m.group(0)), t)
     return t

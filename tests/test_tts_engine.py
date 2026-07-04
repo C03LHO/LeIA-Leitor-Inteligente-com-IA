@@ -55,6 +55,23 @@ def test_split_sentences_handles_pt_punct():
     assert len(out) == 3
 
 
+def test_split_keeps_abbreviations_together():
+    # O ponto de "Dr."/"Dra." não pode encerrar frase.
+    out = split_sentences("O Dr. Silva e a Dra. Souza saíram. Depois voltaram.")
+    assert out == ["O Dr. Silva e a Dra. Souza saíram.", "Depois voltaram."]
+
+
+def test_split_keeps_seculo_with_roman_numeral():
+    # "séc. XX" precisa ficar na mesma frase (senão o romano vira órfão).
+    out = split_sentences("Foi no séc. XX. Um marco histórico.")
+    assert out[0] == "Foi no séc. XX."
+
+
+def test_split_does_not_break_numbers_or_initials():
+    assert split_sentences("Custou 3.14 e 1.234 reais. Fim.") == ["Custou 3.14 e 1.234 reais.", "Fim."]
+    assert split_sentences("J. R. R. Tolkien escreveu. Foi genial.")[0] == "J. R. R. Tolkien escreveu."
+
+
 def test_merge_enumerators_joins_lone_markers():
     assert merge_enumerators(["4.", "São eles:"]) == ["4. São eles:"]
     assert merge_enumerators(["(1)", "A Lei Moral."]) == ["(1) A Lei Moral."]

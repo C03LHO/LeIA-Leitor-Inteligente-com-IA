@@ -6,36 +6,67 @@ from pathlib import Path
 from backend.config import CACHE_DIR
 from backend.utils.paths import audio_cache_path
 
-_FALLBACK_SENT_RE = re.compile(r"(?<=[\.\!\?…])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÀÇ])")
+_FALLBACK_SENT_RE = re.compile(r"(?<=[\.\!\?…])\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÀÇ0-9\"'(])")
 _CACHE_LIMIT_BYTES = 500 * 1024 * 1024
+
+# Abreviações pt-BR cujo ponto NÃO encerra frase. Sem isto, "O Dr. Silva" vira
+# duas frases (quebra o highlight) e "séc. XX" separa "século" do numeral,
+# fazendo a leitura de romanos falhar. Só entram as que SEMPRE são seguidas de
+# conteúdo (nome/número) — não "etc.", que costuma fechar frase.
+_ABBREVS = (
+    "sr", "sra", "srs", "sras", "srta", "srtas", "dr", "dra", "drs", "dras",
+    "prof", "profa", "profs", "profas", "exmo", "exma", "exmos", "ilmo", "ilma",
+    "pág", "pag", "págs", "pags", "pp", "ed", "eds", "vol", "vols",
+    "cap", "caps", "art", "arts", "inc", "fl", "fls", "séc", "sec", "sécs",
+    "fig", "figs", "ref", "est", "av", "trav", "pça", "sto", "sta", "dom",
+    "jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez",
+)
+_DOT = chr(0xE000)  # marcador temporário do ponto (Private Use Area, some no texto)
+_ABBREV_RE = re.compile(
+    r"\b(?:" + "|".join(sorted(_ABBREVS, key=len, reverse=True)) + r")\.",
+    re.IGNORECASE,
+)
+_INITIAL_RE = re.compile(r"\b[A-ZÀ-ÝÁ-Ú]\.(?=\s*[A-ZÀ-ÝÁ-Ú0-9])")  # "J. R. R.", "A. C."
+_NUM_DOT_RE = re.compile(r"(\d)\.(?=\d)")                            # 1.234 / 3.14
+
+
+def _protect_dots(text: str) -> str:
+    """Troca por um marcador os pontos que NÃO terminam frase (abreviações,
+    iniciais, números), para o divisor não quebrar frases no lugar errado."""
+    text = _ABBREV_RE.sub(lambda m: m.group(0)[:-1] + _DOT, text)
+    text = _INITIAL_RE.sub(lambda m: m.group(0)[:-1] + _DOT, text)
+    text = _NUM_DOT_RE.sub(lambda m: m.group(1) + _DOT, text)
+    return text
+
+
+def _restore_dots(parts: list[str]) -> list[str]:
+    return [p.replace(_DOT, ".").strip() for p in parts if p.replace(_DOT, ".").strip()]
 
 
 def split_sentences(text: str) -> list[str]:
     text = text.strip()
     if not text:
         return []
+    protected = _protect_dots(text)  # abreviações/iniciais/números não dividem
     try:
         import nltk
 
         try:
             from nltk.tokenize import sent_tokenize
 
-            return [s.strip() for s in sent_tokenize(text, language="portuguese") if s.strip()]
+            return _restore_dots(sent_tokenize(protected, language="portuguese"))
         except LookupError:
             try:
                 nltk.download("punkt_tab", quiet=True)
                 from nltk.tokenize import sent_tokenize
 
-                return [
-                    s.strip() for s in sent_tokenize(text, language="portuguese") if s.strip()
-                ]
+                return _restore_dots(sent_tokenize(protected, language="portuguese"))
             except Exception:
                 pass
     except Exception:
         pass
 
-    parts = _FALLBACK_SENT_RE.split(text)
-    return [p.strip() for p in parts if p.strip()]
+    return _restore_dots(_FALLBACK_SENT_RE.split(protected))
 
 
 _ENUM_ONLY_RE = re.compile(
