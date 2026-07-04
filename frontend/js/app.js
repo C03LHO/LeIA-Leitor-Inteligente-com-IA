@@ -539,7 +539,16 @@
       const items = q.items || [];
       if (items.length) {
         btn.classList.remove("hidden");
-        if (badge) { badge.textContent = String(items.length); badge.classList.remove("hidden"); }
+        if (badge) {
+          const changed = badge.textContent !== String(items.length);
+          badge.textContent = String(items.length);
+          badge.classList.remove("hidden");
+          if (changed) {                       // batidinha quando o número muda
+            badge.classList.remove("bump");
+            void badge.offsetWidth;            // reinicia a animação
+            badge.classList.add("bump");
+          }
+        }
       } else {
         btn.classList.add("hidden");
         if (badge) badge.classList.add("hidden");

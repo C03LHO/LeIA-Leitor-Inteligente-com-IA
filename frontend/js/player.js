@@ -61,6 +61,9 @@
     if (kind === "play") playI.classList.remove("hidden");
     else if (kind === "pause") pauseI.classList.remove("hidden");
     else if (kind === "loading") loadI.classList.remove("hidden");
+    // Pulso suave no botão só enquanto está de fato narrando.
+    const btn = document.getElementById("btn-play");
+    if (btn) btn.classList.toggle("playing", kind === "pause");
   }
 
   function fmtTime(s) {

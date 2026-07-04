@@ -11,10 +11,14 @@ de CUDA/VRAM na pré-geração de livros grandes.
 from __future__ import annotations
 
 import os
+import re
 import threading
+
+import numpy as np
 
 from backend.config import XTTS_SPEAKER
 from backend.tts.engine import (
+    SAMPLE_RATE,
     _empty_cache,
     _sanitize_text,
     _silence_wav,
@@ -30,6 +34,89 @@ from backend.utils.logging import get_logger
 logger = get_logger("tts.xtts")
 
 MODEL_ID = "tts_models/multilingual/multi-dataset/xtts_v2"
+
+# O XTTS "viaja" (repete/inventa fala) quando recebe um trecho muito longo de
+# uma vez. Fatiamos em blocos curtos e sintetizamos um a um — cada geração fica
+# limitada, o que (1) evita a leitura sem sentido e (2) reduz o risco de travar,
+# já que nenhuma chamada isolada fica gigante.
+_MAX_CHUNK_CHARS = 220
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_CLAUSE_SPLIT = re.compile(r"(?<=[,;:])\s+")
+
+
+def _hard_wrap(text: str, limit: int) -> list[str]:
+    """Último recurso: quebra por palavras quando nem uma oração cabe no limite."""
+    out: list[str] = []
+    cur = ""
+    for word in text.split(" "):
+        if not word:
+            continue
+        if cur and len(cur) + 1 + len(word) > limit:
+            out.append(cur)
+            cur = word
+        else:
+            cur = f"{cur} {word}".strip()
+    if cur:
+        out.append(cur)
+    return out
+
+
+def _chunk_text(text: str, limit: int = _MAX_CHUNK_CHARS) -> list[str]:
+    """Divide o texto em blocos <= limit, respeitando frases, depois orações
+    (vírgula/;/:) e, no pior caso, palavras. Nunca corta no meio de uma palavra."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return [text] if text else []
+
+    units: list[str] = []
+    for sent in _SENT_SPLIT.split(text):
+        sent = sent.strip()
+        if not sent:
+            continue
+        if len(sent) <= limit:
+            units.append(sent)
+            continue
+        for clause in _CLAUSE_SPLIT.split(sent):
+            clause = clause.strip()
+            if not clause:
+                continue
+            if len(clause) <= limit:
+                units.append(clause)
+            else:
+                units.extend(_hard_wrap(clause, limit))
+
+    # Junta unidades vizinhas enquanto couber (menos chamadas = mais rápido).
+    chunks: list[str] = []
+    cur = ""
+    for u in units:
+        if cur and len(cur) + 1 + len(u) > limit:
+            chunks.append(cur)
+            cur = u
+        else:
+            cur = f"{cur} {u}".strip()
+    if cur:
+        chunks.append(cur)
+    return chunks
+
+
+def _guard_ramble(arr: np.ndarray, text: str) -> np.ndarray:
+    """Rede de segurança: se o áudio ficou absurdamente mais longo do que o texto
+    justifica (o XTTS entrou em loop/alucinação), apara para um teto plausível em
+    vez de reproduzir minutos de fala inventada."""
+    if arr.size == 0:
+        return arr
+    dur = arr.size / SAMPLE_RATE
+    nchars = max(1, sum(ch.isalpha() for ch in text))
+    expected = nchars / 12.0 + 0.6  # ~12 letras faladas por segundo + folga
+    if dur > expected * 3.0 and dur > 7.0:
+        cap = int(SAMPLE_RATE * max(expected * 1.8, 3.0))
+        if cap < arr.size:
+            logger.warning(
+                "XTTS possível 'ramble' (%.1fs p/ %d letras) — aparando p/ %.1fs",
+                dur, nchars, cap / SAMPLE_RATE,
+            )
+            return arr[:cap]
+    return arr
 
 
 def _install_transformers_shim() -> None:
@@ -99,23 +186,38 @@ class XTTSEngine:
             except Exception:
                 return []
 
-    def _generate(self, clean: str, speaker: str):
+    def _tts_once(self, text: str, speaker: str) -> np.ndarray:
         import torch
 
         # repetition_penalty alto + top_k/top_p contêm o "rambling" (o XTTS às
         # vezes repete/estende demais). Também deixa a geração mais rápida.
         with torch.inference_mode():
-            return self._tts.tts(
-                text=clean,
+            wav = self._tts.tts(
+                text=text,
                 speaker=speaker,
                 language="pt",
-                split_sentences=True,
+                split_sentences=False,  # já fatiamos nós mesmos, em blocos curtos
                 temperature=0.7,
                 repetition_penalty=5.0,
                 length_penalty=1.0,
                 top_k=50,
                 top_p=0.85,
             )
+        return _guard_ramble(_to_mono_float(wav), text)
+
+    def _generate(self, clean: str, speaker: str) -> np.ndarray:
+        """Fatia o texto em blocos curtos, sintetiza cada um e concatena com uma
+        pausa breve entre eles — narração longa sem viajar nem travar."""
+        chunks = _chunk_text(clean)
+        if len(chunks) <= 1:
+            return self._tts_once(chunks[0] if chunks else clean, speaker)
+        gap = np.zeros(int(SAMPLE_RATE * 0.14), dtype=np.float32)  # ~140ms entre blocos
+        pieces: list[np.ndarray] = []
+        for i, ch in enumerate(chunks):
+            if i:
+                pieces.append(gap)
+            pieces.append(self._tts_once(ch, speaker))
+        return np.concatenate(pieces) if pieces else np.zeros(1, dtype=np.float32)
 
     def synthesize(
         self,
