@@ -245,6 +245,9 @@ def _sanitize_text(text: str) -> str:
     t = re.sub(r"\s+", " ", t)
     t = re.sub(r"\s+([.,;:!?)])", r"\1", t)        # espaço antes de pontuação
     t = re.sub(r"([.,;:!?])\1+", r"\1", t)          # pontuação repetida → uma
+    # Ponto/!/? COLADO à próxima palavra ("5.Assim", "fim.Outro") faz o XTTS
+    # falar "ponto" em voz alta → garante um espaço para virar pausa natural.
+    t = re.sub(r"([.!?])(?=[A-Za-zÀ-ÿ])", r"\1 ", t)
     t = re.sub(r"\(\s*\)", " ", t)                   # parênteses vazios
     return re.sub(r"\s+", " ", t).strip()[:800]
 
@@ -308,6 +311,37 @@ def _trim_audio(arr: np.ndarray) -> np.ndarray:
         out[:f] *= ramp
         out[-f:] *= ramp[::-1]
     return out
+
+
+def _edge_fade(arr: np.ndarray, ms: float = 6.0) -> np.ndarray:
+    """Fade curtíssimo nas pontas de um trecho. Aplicado a cada BLOCO antes de
+    concatenar → elimina o clique/estalo nas junções (parte do 'ruído')."""
+    arr = np.asarray(arr, dtype=np.float32)
+    n = int(SAMPLE_RATE * ms / 1000.0)
+    if n < 1 or arr.size < 2 * n:
+        return arr
+    ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    arr = arr.copy()
+    arr[:n] *= ramp
+    arr[-n:] *= ramp[::-1]
+    return arr
+
+
+def _polish_audio(arr: np.ndarray) -> np.ndarray:
+    """Limpeza final: tira o offset DC e um filtro passa-alta suave (~55 Hz) que
+    remove o rumble/zumbido de fundo do vocoder, deixando a voz mais limpa."""
+    arr = np.asarray(arr, dtype=np.float32)
+    if arr.size < 64:
+        return arr
+    arr = arr - float(np.mean(arr))  # remove DC
+    try:
+        from scipy.signal import butter, sosfilt
+
+        sos = butter(2, 55.0 / (SAMPLE_RATE / 2.0), btype="highpass", output="sos")
+        arr = sosfilt(sos, arr).astype(np.float32)
+    except Exception:
+        pass
+    return arr
 
 
 def _wav_bytes_from_array(samples) -> bytes:

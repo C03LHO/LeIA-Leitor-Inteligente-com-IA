@@ -6,6 +6,18 @@
   <title>LeIA — Leitor Inteligente com IA</title>
   <script>try{if(localStorage.getItem('leia.theme')==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}</script>
   <script>
+    // Trava o ZOOM da janela (Ctrl+scroll / pinça / Ctrl +/-). Sem isto, um zoom
+    // acidental encolhia o viewport, disparava o layout mobile (sumia a sidebar)
+    // e deixava "tudo gigante". Ctrl+0 (reset) continua liberado.
+    (function () {
+      window.addEventListener('wheel', function (e) { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+      window.addEventListener('keydown', function (e) {
+        if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '_'].indexOf(e.key) !== -1) e.preventDefault();
+      });
+      window.addEventListener('gesturestart', function (e) { e.preventDefault(); });
+    })();
+  </script>
+  <script>
     // Reporta erros de JS ao servidor (diagnóstico — some no log do app).
     (function(){
       function rep(m){ try{ navigator.sendBeacon('/api/clientlog', String(m).slice(0,500)); }catch(_){ } }

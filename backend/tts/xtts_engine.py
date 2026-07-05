@@ -19,8 +19,10 @@ import numpy as np
 from backend.config import XTTS_SPEAKER
 from backend.tts.engine import (
     SAMPLE_RATE,
+    _edge_fade,
     _empty_cache,
     _is_speakable_text,
+    _polish_audio,
     _sanitize_text,
     _silence_wav,
     _to_mono_float,
@@ -190,21 +192,25 @@ class XTTSEngine:
     def _tts_once(self, text: str, speaker: str) -> np.ndarray:
         import torch
 
-        # repetition_penalty alto + top_k/top_p contêm o "rambling" (o XTTS às
-        # vezes repete/estende demais). Também deixa a geração mais rápida.
+        # Parâmetros próximos ao default do XTTS (temperatura 0.70, penalidade de
+        # repetição 2.0) → prosódia/entonação NATURAL. Antes usávamos 5.0, que
+        # achatava a fala (som "robótico"/monótono). O "rambling" agora é contido
+        # pelo fatiamento em blocos curtos + a guarda anti-ramble, não pela
+        # penalidade exagerada.
         with torch.inference_mode():
             wav = self._tts.tts(
                 text=text,
                 speaker=speaker,
                 language="pt",
                 split_sentences=False,  # já fatiamos nós mesmos, em blocos curtos
-                temperature=0.7,
-                repetition_penalty=5.0,
+                temperature=0.70,
+                repetition_penalty=2.0,
                 length_penalty=1.0,
                 top_k=50,
                 top_p=0.85,
             )
-        return _guard_ramble(_to_mono_float(wav), text)
+        # fade nas pontas do bloco → junção sem clique ao concatenar
+        return _edge_fade(_guard_ramble(_to_mono_float(wav), text))
 
     def _generate(self, clean: str, speaker: str) -> np.ndarray:
         """Fatia o texto em blocos curtos, sintetiza cada um e concatena com uma
@@ -212,7 +218,7 @@ class XTTSEngine:
         chunks = _chunk_text(clean)
         if len(chunks) <= 1:
             return self._tts_once(chunks[0] if chunks else clean, speaker)
-        gap = np.zeros(int(SAMPLE_RATE * 0.14), dtype=np.float32)  # ~140ms entre blocos
+        gap = np.zeros(int(SAMPLE_RATE * 0.08), dtype=np.float32)  # ~80ms entre blocos
         pieces: list[np.ndarray] = []
         for i, ch in enumerate(chunks):
             if i:
@@ -247,7 +253,7 @@ class XTTSEngine:
                     wav = self._generate(clean, speaker)
                 else:
                     raise
-        return _wav_bytes_from_array(_trim_audio(_to_mono_float(wav)))
+        return _wav_bytes_from_array(_polish_audio(_trim_audio(_to_mono_float(wav))))
 
     def empty_cache(self) -> None:
         _empty_cache()

@@ -12,6 +12,7 @@
     bufferedIds: new Set(),
     audio: null,
     socket: null,
+    streamDone: false, // o lote (seção) atual terminou de transmitir?
     sectionAudioBlobs: [], // for download
   };
 
@@ -161,6 +162,7 @@
     state.socket = null;
     state.audioQueue = [];
     state.bufferedIds.clear();
+    state.streamDone = false;
     setPlayIcon("play");
     if (!keepHighlight) {
       window.LeIA.reader.highlight(null);
@@ -184,16 +186,24 @@
 
     state.isPlaying = true;
     state.isBuffering = true;
+    state.streamDone = false;
+    state.audioQueue = [];
+    state.bufferedIds.clear();
     setPlayIcon("loading");
 
-    state.socket = window.LeIA.api.openTTSSocket();
-    state.socket.onopen = () => {
-      state.socket.send(JSON.stringify({
+    // Captura o socket local: se um novo lote (próxima seção) começar, os
+    // handlers do socket antigo não devem mais mexer no estado.
+    const sock = window.LeIA.api.openTTSSocket();
+    state.socket = sock;
+    sock.onopen = () => {
+      if (state.socket !== sock) return;
+      sock.send(JSON.stringify({
         sentences: slice.map((x) => ({ id: x.id, text: x.text })),
         voice: state.voiceId,
       }));
     };
-    state.socket.onmessage = (ev) => {
+    sock.onmessage = (ev) => {
+      if (state.socket !== sock) return;
       const msg = JSON.parse(ev.data);
       if (msg.type === "audio_chunk") {
         state.audioQueue.push(msg);
@@ -209,22 +219,40 @@
           "danger"
         );
       } else if (msg.type === "section_done") {
-        // ok, queue drains
+        state.streamDone = true;
       }
     };
-    state.socket.onerror = () => {
+    sock.onerror = () => {
+      if (state.socket !== sock) return;
       window.LeIA.toast("WebSocket TTS falhou", "danger");
       stop();
     };
-    state.socket.onclose = () => {
-      if (state.audioQueue.length === 0 && (!state.audio || state.audio.ended)) {
-        if (state.isPlaying && state.bufferedIds.size === 0) stop();
+    sock.onclose = () => {
+      if (state.socket !== sock) return;
+      state.streamDone = true;   // a seção terminou de transmitir
+      // Se o áudio já acabou e a fila esvaziou, decide continuar ou parar.
+      if (state.isPlaying && state.audioQueue.length === 0 && (!state.audio || state.audio.ended)) {
+        playNext();
       }
     };
   }
 
   function playNext() {
     if (state.audioQueue.length === 0) {
+      // Acabou o lote atual. Se a seção terminou de transmitir e ainda há texto,
+      // CONTINUA sozinho na próxima seção (antes travava aqui e exigia clique).
+      if (state.streamDone && state.isPlaying) {
+        const r = window.LeIA.reader.state;
+        const cur = r.sentenceById.get(state.currentSentenceId);
+        const nextIdx = cur ? cur.globalIndex + 1 : 0;
+        if (nextIdx < r.sentences.length) {
+          state.currentSentenceId = r.sentences[nextIdx].id;
+          startFromCurrent();   // abre novo socket para a próxima seção
+          return;
+        }
+        stop();   // fim do documento
+        return;
+      }
       state.isBuffering = state.isPlaying; // still expecting
       setPlayIcon(state.isPlaying ? "loading" : "play");
       return;

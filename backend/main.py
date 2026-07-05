@@ -119,13 +119,15 @@ def _run_window(port: int) -> None:
         print("[LeIA] o servidor não respondeu a tempo.")
 
     icon = FRONTEND_DIR / "favicon.ico"
-    webview.create_window(
-        f"{APP_NAME} — Leitor Inteligente com IA",
-        url,
-        width=1200,
-        height=820,
-        min_size=(940, 640),
-    )
+    # zoomable=False → o WebView2 não deixa o usuário dar zoom (Ctrl+scroll), que
+    # antes encolhia o viewport e "quebrava" o layout (sumia a sidebar, tudo
+    # gigante). Reforçado por uma trava em JS no index.html.
+    _win_kwargs = dict(width=1200, height=820, min_size=(940, 640), zoomable=False)
+    try:
+        webview.create_window(f"{APP_NAME} — Leitor Inteligente com IA", url, **_win_kwargs)
+    except TypeError:
+        _win_kwargs.pop("zoomable", None)  # versões antigas do pywebview
+        webview.create_window(f"{APP_NAME} — Leitor Inteligente com IA", url, **_win_kwargs)
     # storage_path + private_mode=False → localStorage (progresso, marcadores,
     # estatísticas, ajustes) PERSISTE entre sessões e sobrevive a fechamento
     # brusco/queda de energia. Sem isso, o pywebview roda em modo privado e
