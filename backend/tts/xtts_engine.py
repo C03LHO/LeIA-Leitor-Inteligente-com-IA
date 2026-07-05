@@ -21,8 +21,8 @@ from backend.tts.engine import (
     SAMPLE_RATE,
     _edge_fade,
     _empty_cache,
+    _humanize_audio,
     _is_speakable_text,
-    _polish_audio,
     _sanitize_text,
     _silence_wav,
     _to_mono_float,
@@ -203,11 +203,11 @@ class XTTSEngine:
                 speaker=speaker,
                 language="pt",
                 split_sentences=False,  # já fatiamos nós mesmos, em blocos curtos
-                temperature=0.70,
+                temperature=0.78,       # um pouco mais expressiva/viva (era 0.70)
                 repetition_penalty=2.0,
                 length_penalty=1.0,
                 top_k=50,
-                top_p=0.85,
+                top_p=0.88,
             )
         # fade nas pontas do bloco → junção sem clique ao concatenar
         return _edge_fade(_guard_ramble(_to_mono_float(wav), text))
@@ -253,7 +253,7 @@ class XTTSEngine:
                     wav = self._generate(clean, speaker)
                 else:
                     raise
-        return _wav_bytes_from_array(_polish_audio(_trim_audio(_to_mono_float(wav))))
+        return _wav_bytes_from_array(_humanize_audio(_trim_audio(_to_mono_float(wav))))
 
     def empty_cache(self) -> None:
         _empty_cache()

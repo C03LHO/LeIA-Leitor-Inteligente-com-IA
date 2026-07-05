@@ -344,6 +344,93 @@ def _polish_audio(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
+def _biquad_shelf(arr: np.ndarray, fc: float, gain_db: float, kind: str, q: float = 0.707) -> np.ndarray:
+    """Filtro shelf (RBJ) — realça graves (calor) ou agudos (presença/ar) sem
+    soar artificial. gain_db pequeno (+1 a +3) mantém a voz natural."""
+    import math
+
+    try:
+        from scipy.signal import lfilter
+    except Exception:
+        return arr
+    A = 10 ** (gain_db / 40.0)
+    w0 = 2 * math.pi * fc / SAMPLE_RATE
+    cw, sw = math.cos(w0), math.sin(w0)
+    alpha = sw / (2 * q)
+    sqA = math.sqrt(A)
+    if kind == "high":
+        b0 = A * ((A + 1) + (A - 1) * cw + 2 * sqA * alpha)
+        b1 = -2 * A * ((A - 1) + (A + 1) * cw)
+        b2 = A * ((A + 1) + (A - 1) * cw - 2 * sqA * alpha)
+        a0 = (A + 1) - (A - 1) * cw + 2 * sqA * alpha
+        a1 = 2 * ((A - 1) - (A + 1) * cw)
+        a2 = (A + 1) - (A - 1) * cw - 2 * sqA * alpha
+    else:  # low shelf
+        b0 = A * ((A + 1) - (A - 1) * cw + 2 * sqA * alpha)
+        b1 = 2 * A * ((A - 1) - (A + 1) * cw)
+        b2 = A * ((A + 1) - (A - 1) * cw - 2 * sqA * alpha)
+        a0 = (A + 1) + (A - 1) * cw + 2 * sqA * alpha
+        a1 = -2 * ((A - 1) + (A + 1) * cw)
+        a2 = (A + 1) + (A - 1) * cw - 2 * sqA * alpha
+    b = np.array([b0, b1, b2], dtype=np.float64) / a0
+    a = np.array([1.0, a1 / a0, a2 / a0], dtype=np.float64)
+    return lfilter(b, a, arr).astype(np.float32)
+
+
+def _reverb(arr: np.ndarray, wet: float = 0.04, decay: float = 0.26) -> np.ndarray:
+    """Espaço/ambiência MUITO sutil — tira a secura sintética e dá 'vida' à voz,
+    como se gravada numa sala pequena. wet baixo (~0.04) = quase imperceptível."""
+    if wet <= 0:
+        return arr
+    try:
+        from scipy.signal import fftconvolve
+
+        n = int(SAMPLE_RATE * decay)
+        if n < 8:
+            return arr
+        t = np.linspace(0.0, 1.0, n, dtype=np.float32)
+        rng = np.random.RandomState(42)
+        ir = rng.randn(n).astype(np.float32) * np.exp(-5.0 * t)
+        k = max(1, int(SAMPLE_RATE * 0.002))
+        ir = np.convolve(ir, np.ones(k, np.float32) / k, mode="same").astype(np.float32)
+        ir[0] += 1.0  # som direto
+        wetsig = fftconvolve(arr, ir)[: arr.size].astype(np.float32)
+        m = float(np.max(np.abs(wetsig))) or 1.0
+        wetsig *= (float(np.max(np.abs(arr))) or 0.0) / m
+        return ((1.0 - wet) * arr + wet * wetsig).astype(np.float32)
+    except Exception:
+        return arr
+
+
+def _normalize_rms(arr: np.ndarray, target: float = 0.10, max_gain: float = 6.0, peak: float = 0.97) -> np.ndarray:
+    """Loudness consistente entre frases (som 'produzido'), com teto de pico."""
+    rms = float(np.sqrt(np.mean(arr * arr) + 1e-12))
+    if rms < 1e-5:
+        return arr
+    arr = arr * min(target / rms, max_gain)
+    pk = float(np.max(np.abs(arr))) if arr.size else 0.0
+    if pk > peak:
+        arr = arr * (peak / pk)
+    return arr.astype(np.float32)
+
+
+def _humanize_audio(arr: np.ndarray, wet: float = 0.04) -> np.ndarray:
+    """Cadeia de 'humanização' da voz: limpa o resíduo digital, dá calor e
+    presença, um leve espaço e loudness consistente → mais natural e viva."""
+    arr = np.asarray(arr, dtype=np.float32)
+    if arr.size < 128:
+        return arr
+    # OBS.: NÃO usamos denoise espectral — a saída do XTTS já é limpa, e o
+    # noisereduce criava "ruído musical" nos agudos (piorava). O "robótico" é
+    # prosódia/secura, tratada por parâmetros + calor + espaço.
+    arr = _polish_audio(arr)                        # DC + passa-alta (rumble)
+    arr = _biquad_shelf(arr, 240.0, 2.0, "low")     # calor/corpo (mais humano)
+    arr = _biquad_shelf(arr, 8200.0, -2.0, "high")  # suaviza a aspereza "digital"
+    arr = _reverb(arr, wet=wet)                     # ambiência sutil ("vida")
+    arr = _normalize_rms(arr, target=0.13)          # loudness consistente
+    return arr
+
+
 def _wav_bytes_from_array(samples) -> bytes:
     arr = np.asarray(samples, dtype=np.float32)
     arr = np.clip(arr, -1.0, 1.0)
