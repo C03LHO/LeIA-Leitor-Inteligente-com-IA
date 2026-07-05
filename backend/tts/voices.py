@@ -43,7 +43,7 @@ XTTS_VOICES: list[Voice] = [
     Voice("Damien Black", "Damião", "Masculina", "Envolvente", "Voz principal. Masculina marcante e limpa, ótima para qualquer livro."),
     Voice("Ana Florence", "Ana", "Feminina", "Clara e calma", "Recomendada. Feminina brasileira, ótima para leitura longa."),
     Voice("Sofia Hellen", "Sofia", "Feminina", "Suave", "Feminina suave, tom acolhedor."),
-    Voice("Alma Maria", "Alma", "Feminina", "Expressiva", "Feminina expressiva, boa para ficção."),
+    Voice("Alma María", "Alma", "Feminina", "Expressiva", "Feminina expressiva, boa para ficção."),
     Voice("Daisy Studious", "Daisy", "Feminina", "Séria", "Feminina séria, boa para não-ficção."),
     Voice("Luis Moray", "Luís", "Masculina", "Firme", "Masculina firme e articulada."),
     Voice("Dionisio Schuyler", "Dionísio", "Masculina", "Grave", "Masculina grave, tom de contador de histórias."),
