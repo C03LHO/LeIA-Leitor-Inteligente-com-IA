@@ -81,9 +81,16 @@ def test_merge_enumerators_joins_lone_markers():
 
 
 def test_sanitize_keeps_clean_portuguese():
-    assert _sanitize_text("O menino correu para casa.") == "O menino correu para casa."
+    # O ponto FINAL é removido (o XTTS às vezes fala "ponto"); a frase permanece.
+    assert _sanitize_text("O menino correu para casa.") == "O menino correu para casa"
     # Ordinais são lidos por extenso (números por extenso, Fase A).
     assert _sanitize_text("1º lugar e 3ª posição") == "primeiro lugar e terceira posição"
+
+
+def test_sanitize_strips_final_period_keeps_question():
+    assert _sanitize_text("Isto é uma frase.") == "Isto é uma frase"
+    assert _sanitize_text("Você viu isso?") == "Você viu isso?"       # ? fica
+    assert _sanitize_text("Que incrível!") == "Que incrível!"          # ! fica
 
 
 def test_sanitize_strips_shapes_and_symbols():
@@ -105,7 +112,7 @@ def test_sanitize_removes_urls_and_emails():
 
 
 def test_sanitize_normalizes_punctuation():
-    assert _sanitize_text("Ele disse “olá” — e sumiu…") == 'Ele disse "olá", e sumiu.'
+    assert _sanitize_text("Ele disse “olá” — e sumiu…") == 'Ele disse "olá", e sumiu'
     assert _sanitize_text("Bom dia!!! Tudo bem???") == "Bom dia! Tudo bem?"
 
 

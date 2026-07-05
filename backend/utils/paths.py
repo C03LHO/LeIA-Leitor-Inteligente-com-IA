@@ -8,7 +8,7 @@ from backend.config import CACHE_DIR
 
 # Versão da síntese: muda quando os parâmetros/pós-processamento mudam, para
 # invalidar áudio antigo (com artefatos) sem precisar limpar manualmente.
-_SYNTH_VERSION = "v7"
+_SYNTH_VERSION = "v8"
 
 
 def audio_cache_path(text: str, voice: str, speed: float) -> Path:

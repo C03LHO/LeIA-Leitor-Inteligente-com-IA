@@ -249,7 +249,12 @@ def _sanitize_text(text: str) -> str:
     # falar "ponto" em voz alta → garante um espaço para virar pausa natural.
     t = re.sub(r"([.!?])(?=[A-Za-zÀ-ÿ])", r"\1 ", t)
     t = re.sub(r"\(\s*\)", " ", t)                   # parênteses vazios
-    return re.sub(r"\s+", " ", t).strip()[:800]
+    t = re.sub(r"\s+", " ", t).strip()
+    # Cada frase é sintetizada isolada; um "." SOZINHO no fim faz o XTTS (ex.: o
+    # Damião) dizer "ponto final". A entonação de fim já vem da estrutura, então
+    # tiramos o ponto final. "?" e "!" ficam (dão entonação importante).
+    t = re.sub(r"[\s.]*\.\s*$", "", t)
+    return t[:800]
 
 
 # Fragmento formado só por número + pontuação (nº de página, enumerador solto
