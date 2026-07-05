@@ -402,6 +402,25 @@ def _reverb(arr: np.ndarray, wet: float = 0.04, decay: float = 0.26) -> np.ndarr
         return arr
 
 
+def _gate(arr: np.ndarray, thresh: float = 0.045, floor_db: float = -13.0,
+          win_ms: float = 12.0, smooth_ms: float = 30.0) -> np.ndarray:
+    """Expander/gate suave: abaixa o sinal de BAIXO nível (o zumbido/'roco' que
+    aparece na cauda das palavras, onde a voz cai) sem cortar a fala. O ganho é
+    suavizado para não 'chiar' nem cortar abrupto."""
+    if arr.size < 256:
+        return arr
+    w = max(1, int(SAMPLE_RATE * win_ms / 1000.0))
+    env = np.sqrt(np.convolve(arr.astype(np.float64) ** 2, np.ones(w) / w, mode="same") + 1e-9)
+    peak = float(env.max()) or 1.0
+    t = thresh * peak
+    floor = 10.0 ** (floor_db / 20.0)
+    ratio = np.clip(env / t, 0.0, 1.0)            # 0 no silêncio, 1 na fala
+    g = floor + (1.0 - floor) * ratio             # ramp suave floor->1
+    sw = max(1, int(SAMPLE_RATE * smooth_ms / 1000.0))
+    g = np.convolve(g, np.ones(sw) / sw, mode="same")
+    return (arr * g.astype(np.float32)).astype(np.float32)
+
+
 def _normalize_rms(arr: np.ndarray, target: float = 0.10, max_gain: float = 6.0, peak: float = 0.97) -> np.ndarray:
     """Loudness consistente entre frases (som 'produzido'), com teto de pico."""
     rms = float(np.sqrt(np.mean(arr * arr) + 1e-12))
@@ -414,20 +433,22 @@ def _normalize_rms(arr: np.ndarray, target: float = 0.10, max_gain: float = 6.0,
     return arr.astype(np.float32)
 
 
-def _humanize_audio(arr: np.ndarray, wet: float = 0.04) -> np.ndarray:
-    """Cadeia de 'humanização' da voz: limpa o resíduo digital, dá calor e
-    presença, um leve espaço e loudness consistente → mais natural e viva."""
+def _humanize_audio(arr: np.ndarray, wet: float = 0.0) -> np.ndarray:
+    """Cadeia de 'humanização' da voz: calor leve, suaviza a aspereza digital,
+    tira o zumbido das caudas ('roco no fim da palavra') e loudness consistente.
+    EQ CONTIDA para não engrossar/abafar vozes graves (ex.: Damião)."""
     arr = np.asarray(arr, dtype=np.float32)
     if arr.size < 128:
         return arr
     # OBS.: NÃO usamos denoise espectral — a saída do XTTS já é limpa, e o
-    # noisereduce criava "ruído musical" nos agudos (piorava). O "robótico" é
-    # prosódia/secura, tratada por parâmetros + calor + espaço.
-    arr = _polish_audio(arr)                        # DC + passa-alta (rumble)
-    arr = _biquad_shelf(arr, 240.0, 2.0, "low")     # calor/corpo (mais humano)
-    arr = _biquad_shelf(arr, 8200.0, -2.0, "high")  # suaviza a aspereza "digital"
-    arr = _reverb(arr, wet=wet)                     # ambiência sutil ("vida")
-    arr = _normalize_rms(arr, target=0.13)          # loudness consistente
+    # noisereduce criava "ruído musical" nos agudos (piorava).
+    arr = _polish_audio(arr)                         # DC + passa-alta (rumble)
+    arr = _biquad_shelf(arr, 220.0, 1.2, "low")      # calor leve (seguro p/ voz grave)
+    arr = _biquad_shelf(arr, 8500.0, -1.8, "high")   # suaviza a aspereza "digital"
+    arr = _gate(arr)                                 # tira o zumbido/roco nas caudas
+    if wet > 0:
+        arr = _reverb(arr, wet=wet)                  # ambiência opcional
+    arr = _normalize_rms(arr, target=0.13)           # loudness consistente
     return arr
 
 
