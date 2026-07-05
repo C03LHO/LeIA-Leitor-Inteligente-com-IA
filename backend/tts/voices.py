@@ -37,11 +37,11 @@ class Voice:
 
 # Catálogo curado de vozes do XTTS-v2 (falantes embutidos) para narração em
 # português. O `id` é o nome do falante que o XTTS usa internamente.
-# As duas RECOMENDADAS (as que você gostou) são a Ana e o Damião — ficam no topo;
-# as demais são opções secundárias.
+# O Damião é a voz PRINCIPAL (padrão); a Ana é a segunda recomendada. As demais
+# são opções secundárias.
 XTTS_VOICES: list[Voice] = [
+    Voice("Damien Black", "Damião", "Masculina", "Envolvente", "Voz principal. Masculina marcante e limpa, ótima para qualquer livro."),
     Voice("Ana Florence", "Ana", "Feminina", "Clara e calma", "Recomendada. Feminina brasileira, ótima para leitura longa."),
-    Voice("Damien Black", "Damião", "Masculina", "Envolvente", "Recomendada. Masculina marcante, boa para ficção e suspense."),
     Voice("Sofia Hellen", "Sofia", "Feminina", "Suave", "Feminina suave, tom acolhedor."),
     Voice("Alma Maria", "Alma", "Feminina", "Expressiva", "Feminina expressiva, boa para ficção."),
     Voice("Daisy Studious", "Daisy", "Feminina", "Séria", "Feminina séria, boa para não-ficção."),
@@ -49,13 +49,13 @@ XTTS_VOICES: list[Voice] = [
     Voice("Dionisio Schuyler", "Dionísio", "Masculina", "Grave", "Masculina grave, tom de contador de histórias."),
 ]
 
-# Ids das vozes recomendadas (destacadas na interface).
-RECOMMENDED_VOICE_IDS = ["Ana Florence", "Damien Black"]
+# Ids das vozes recomendadas (destacadas na interface) — Damião primeiro.
+RECOMMENDED_VOICE_IDS = ["Damien Black", "Ana Florence"]
 
 EMBEDDED_VOICES = XTTS_VOICES
 _VOICE_BY_ID = {v.id: v for v in XTTS_VOICES}
 
-DEFAULT_VOICE_ID = "Ana Florence"
+DEFAULT_VOICE_ID = "Damien Black"
 
 # Voz ativa persistida (sobrevive a reinício). Guardada em settings.json.
 _SETTINGS_PATH = USER_DATA_DIR / "settings.json"

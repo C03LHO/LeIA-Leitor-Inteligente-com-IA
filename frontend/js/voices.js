@@ -17,6 +17,12 @@
       const r = await window.LeIA.api.getJSON("/api/voices");
       state.voices = r.voices || [];
       if (!state.selectedId) state.selectedId = r.active || (state.voices[0] && state.voices[0].id);
+      // Mantém o player em sincronia com a voz ativa e, quando não há escolha
+      // salva, adota o padrão do sistema (hoje o Damião).
+      const sv = state.voices.find((x) => x.id === state.selectedId);
+      if (sv && window.LeIA.player && window.LeIA.player.setVoice) {
+        window.LeIA.player.setVoice(state.selectedId, sv.name);
+      }
       render();
       updateVoiceLabel();
     } catch (e) {
@@ -98,6 +104,14 @@
   }
 
   function initVoices() {
+    // Migração única: o Damião virou a voz principal (v1.6.5). Quem já tinha uma
+    // voz salva é movido UMA vez para o novo padrão; escolhas futuras são mantidas.
+    try {
+      if (!localStorage.getItem("leia.voiceMigratedV165")) {
+        localStorage.removeItem("leia.voice");
+        localStorage.setItem("leia.voiceMigratedV165", "1");
+      }
+    } catch {}
     try { state.selectedId = localStorage.getItem("leia.voice") || null; } catch { state.selectedId = null; }
 
     const btn = document.getElementById("btn-voice");
