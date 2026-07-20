@@ -285,6 +285,7 @@
   }
 
   function toggle() {
+    if (window.LeIA.synced && window.LeIA.synced.isActive()) return window.LeIA.synced.toggle();
     if (!state.isPlaying && !state.audioReady) {
       window.LeIA.toast("⏳ A narração ainda está sendo preparada. Aguarde ficar pronta.", "info");
       return;
@@ -305,6 +306,7 @@
   }
 
   function jumpToSentence(sid) {
+    if (window.LeIA.synced && window.LeIA.synced.isActive()) return window.LeIA.synced.seekToId(sid);
     const r = window.LeIA.reader.state;
     if (!r.sentenceById.has(sid)) return;
     const wasPlaying = state.isPlaying;
@@ -317,6 +319,7 @@
   }
 
   function moveSentence(delta) {
+    if (window.LeIA.synced && window.LeIA.synced.isActive()) return window.LeIA.synced.step(delta);
     const r = window.LeIA.reader.state;
     if (r.sentences.length === 0) return;
     const cur = currentSentence();
@@ -345,6 +348,7 @@
     document.getElementById("speed-label").textContent = value.toFixed(2).replace(/0$/,'') + "x";
     // Velocidade é playbackRate no navegador → muda ao vivo, sem re-sintetizar.
     if (state.audio) state.audio.playbackRate = value;
+    if (window.LeIA.synced) window.LeIA.synced.setSpeed(value);
   }
 
   // Ao abrir um livro: aplica a velocidade lembrada dele (ou a global) e zera
@@ -379,6 +383,7 @@
     savePref("leia.volume", state.volume);
     savePref("leia.muted", "0");
     if (state.audio) state.audio.volume = state.volume;
+    if (window.LeIA.synced) window.LeIA.synced.setVolume(state.volume, state.muted);
     document.getElementById("volume-slider").value = String(Math.round(state.volume * 100));
     document.getElementById("volume-value").textContent = Math.round(state.volume * 100);
   }
@@ -391,6 +396,7 @@
     state.muted = !state.muted;
     savePref("leia.muted", state.muted ? "1" : "0");
     if (state.audio) state.audio.volume = state.muted ? 0 : state.volume;
+    if (window.LeIA.synced) window.LeIA.synced.setVolume(state.volume, state.muted);
     window.LeIA.toast(state.muted ? "Mudo" : "Som ativo", "info");
   }
 
@@ -429,6 +435,8 @@
     const track = e.currentTarget.querySelector(".scrubber-track");
     const rect = track.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    // Áudio sincronizado: o scrubber navega pelo TEMPO do áudio.
+    if (window.LeIA.synced && window.LeIA.synced.isActive()) return window.LeIA.synced.seekRatio(ratio);
     const idx = Math.min(r.sentences.length - 1, Math.floor(ratio * r.sentences.length));
     jumpToSentence(r.sentences[idx].id);
   }

@@ -24,6 +24,7 @@ num2words>=0.5.14       # números por extenso na narração (pt-BR); o coqui-tt
 # Áudio / audiolivro / transferência p/ celular
 pydub==0.25.1           # concatena e encoda o audiolivro (usa ffmpeg)
 qrcode==7.4.2           # QR para transferir o audiolivro pela rede local
+faster-whisper==1.1.0   # transcrição c/ tempo por palavra → sincroniza áudio importado ao texto
 
 # Motor TTS: Chatterbox (Resemble AI) — licença MIT, wheel pré-compilado (py3-none-any),
 # instala SEM o compilador C++ da Microsoft. Voz nativa pt-BR via modelo multilíngue.

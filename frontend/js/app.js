@@ -200,7 +200,11 @@
       window.LeIA.player.restorePosition(saved > 0 ? saved : 0);
       if (window.LeIA.player.renderBookmarks) window.LeIA.player.renderBookmarks();
       if (saved > 0) toast("📖 Retomando de onde você parou", "info");
-      gatePlayUntilReady(jobId, audioReadyHint);
+      // Se o livro tem áudio humano sincronizado, entra nesse modo (toca o áudio
+      // importado). Senão, segue no fluxo normal da narração por IA.
+      window.LeIA.synced.load(jobId).then((ok) => {
+        if (!ok) gatePlayUntilReady(jobId, audioReadyHint);
+      });
     } catch (e) {
       toast("Falha ao abrir: " + e.message, "danger");
     }
@@ -266,6 +270,7 @@
     activeCollection = "";
     const si = document.getElementById("library-search");
     if (si) si.value = "";
+    window.LeIA.synced.unload();
     window.LeIA.player.stop({ keepHighlight: false });
     window.LeIA.reader.reset();
     refreshLibrary();
@@ -596,6 +601,7 @@
     window.LeIA.initUpload();
     window.LeIA.player.initPlayer();
     window.LeIA.find.init();
+    window.LeIA.synced.init();
     window.LeIA.audiobook.init();
     window.LeIA.voices.initVoices();
     window.LeIA.settings.initSettings();

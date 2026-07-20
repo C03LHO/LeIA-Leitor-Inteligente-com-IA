@@ -17,6 +17,7 @@ from backend.config import CACHE_DIR
 from backend.epub.extractor import build_epub_document, extract_epub_cover
 from backend.pdf.cleaner import CleaningConfig
 from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author, render_cover
+from backend.align.aligner import align_sentences, transcribe_words, whisper_available
 from backend.audio.audiobook import audiobook_path, build_audiobook, ffmpeg_available
 from backend.pdf.ocr import ocr_available, ocr_pdf_blocks
 from backend.share.lan import start_share
@@ -754,6 +755,15 @@ def delete_doc(job_id: str):
             pass
     _jobs.pop(job_id, None)
     _audio_jobs.pop(job_id, None)
+    # áudio importado + sincronização
+    try:
+        old = _find_synced_audio(job_id)
+        if old:
+            old.unlink(missing_ok=True)
+        _alignment_path(job_id).unlink(missing_ok=True)
+        _sync_jobs.pop(job_id, None)
+    except Exception:
+        pass
     # 3) tira da fila de narração (evita "fantasma" na fila); se estiver ativo,
     #    marca como cancelado para o worker parar e não recriar o índice.
     with _queue_lock:
@@ -779,3 +789,139 @@ async def extract_sync(file: UploadFile):
         return build_document(blocks, str(target), file.filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# --------------------------------------------------------------------------- #
+# Sincronizar um ÁUDIO IMPORTADO (audiolivro humano) com o texto do livro
+# (forced alignment). O usuário fornece o arquivo; o app NÃO baixa de lugar
+# nenhum. O Whisper transcreve e casamos com as frases já conhecidas.
+# --------------------------------------------------------------------------- #
+_SYNC_AUDIO_EXTS = (".mp3", ".m4a", ".m4b", ".wav", ".ogg", ".opus", ".aac", ".flac")
+_ALIGN_MODEL = "small"
+_sync_jobs: dict[str, dict] = {}
+
+
+def _synced_dir() -> Path:
+    d = CACHE_DIR / "synced"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _alignment_path(job_id: str) -> Path:
+    return _synced_dir() / f"{job_id}.json"
+
+
+def _find_synced_audio(job_id: str) -> Path | None:
+    for ext in _SYNC_AUDIO_EXTS:
+        p = _synced_dir() / f"{job_id}{ext}"
+        if p.exists():
+            return p
+    return None
+
+
+def _sentences_with_ids(result: dict) -> list[dict]:
+    out: list[dict] = []
+    for sec in result.get("sections", []):
+        for p in sec.get("paragraphs", []):
+            for s in p.get("sentences", []):
+                t = (s.get("text") or "").strip()
+                if t and s.get("id"):
+                    out.append({"id": s["id"], "text": t})
+    return out
+
+
+def _run_alignment(job_id: str, audio_path: Path) -> None:
+    try:
+        _sync_jobs[job_id] = {"status": "transcribing", "progress": 0.0}
+        result = json.loads(pdf_result_path(job_id).read_text(encoding="utf-8"))
+        sentences = _sentences_with_ids(result)
+        if not sentences:
+            raise RuntimeError("Este livro não tem texto para sincronizar.")
+
+        def prog(p: float) -> None:
+            j = _sync_jobs.get(job_id)
+            if j is not None:
+                j["progress"] = round(p, 3)
+
+        words = transcribe_words(audio_path, _ALIGN_MODEL, progress_cb=prog)
+        if not words:
+            raise RuntimeError("Não consegui entender o áudio (fala não reconhecida).")
+        _sync_jobs[job_id] = {"status": "aligning", "progress": 0.99}
+        aligned = align_sentences(sentences, words)
+        matched = sum(1 for a in aligned if a["end"] > a["start"])
+        _alignment_path(job_id).write_text(
+            json.dumps({"audio": audio_path.name, "sentences": aligned}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        _library_put(job_id, synced=True)
+        _sync_jobs[job_id] = {"status": "done", "progress": 1.0, "count": len(aligned), "matched": matched}
+        logger.info("Sincronizado job %s: %d frases (%d casadas)", job_id, len(aligned), matched)
+    except Exception as exc:
+        logger.exception("Falha ao sincronizar áudio (job %s)", job_id)
+        _sync_jobs[job_id] = {"status": "error", "error": str(exc)}
+
+
+@router.post("/{job_id}/import-audio")
+async def import_audio(job_id: str, file: UploadFile):
+    if not pdf_result_path(job_id).exists():
+        raise HTTPException(status_code=404, detail="Livro não encontrado")
+    if not whisper_available():
+        raise HTTPException(status_code=400, detail="Motor de sincronização indisponível (faster-whisper).")
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in _SYNC_AUDIO_EXTS:
+        raise HTTPException(status_code=400, detail="Formato de áudio não suportado (use mp3, m4b, m4a, wav, ogg…).")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+    # remove áudio/sync anterior deste livro
+    old = _find_synced_audio(job_id)
+    if old:
+        old.unlink(missing_ok=True)
+    _alignment_path(job_id).unlink(missing_ok=True)
+    target = _synced_dir() / f"{job_id}{ext}"
+    target.write_bytes(data)
+    _sync_jobs[job_id] = {"status": "transcribing", "progress": 0.0}
+    threading.Thread(target=_run_alignment, args=(job_id, target), daemon=True, name=f"leia-sync-{job_id}").start()
+    return {"status": "transcribing", "filename": file.filename, "size_bytes": len(data)}
+
+
+@router.get("/{job_id}/sync-status")
+def sync_status(job_id: str):
+    j = _sync_jobs.get(job_id)
+    if j:
+        return j
+    if _alignment_path(job_id).exists() and _find_synced_audio(job_id):
+        return {"status": "done", "progress": 1.0}
+    return {"status": "none"}
+
+
+@router.get("/{job_id}/alignment")
+def get_alignment(job_id: str):
+    p = _alignment_path(job_id)
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Sem sincronização")
+    return JSONResponse(json.loads(p.read_text(encoding="utf-8")))
+
+
+@router.get("/{job_id}/synced-audio")
+def get_synced_audio(job_id: str):
+    p = _find_synced_audio(job_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Sem áudio sincronizado")
+    media = {
+        ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".m4b": "audio/mp4",
+        ".wav": "audio/wav", ".ogg": "audio/ogg", ".opus": "audio/ogg",
+        ".aac": "audio/aac", ".flac": "audio/flac",
+    }.get(p.suffix.lower(), "application/octet-stream")
+    return FileResponse(str(p), media_type=media)
+
+
+@router.delete("/{job_id}/synced-audio")
+def delete_synced_audio(job_id: str):
+    old = _find_synced_audio(job_id)
+    if old:
+        old.unlink(missing_ok=True)
+    _alignment_path(job_id).unlink(missing_ok=True)
+    _sync_jobs.pop(job_id, None)
+    _library_put(job_id, synced=False)
+    return {"ok": True}
