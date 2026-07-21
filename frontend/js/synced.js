@@ -263,6 +263,14 @@
         input.value = "";
       });
     }
+    const btn = $("btn-sync-audio");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        if (S.status.syncing) { window.LeIA.toast("Já estou sincronizando este livro…", "info"); return; }
+        if (S.status.has) { activate(); return; }   // já tem áudio → usa a voz humana
+        pickFile();                                  // senão → importar
+      });
+    }
   }
 
   window.LeIA = window.LeIA || {};
