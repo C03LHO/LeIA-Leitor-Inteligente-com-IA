@@ -202,7 +202,7 @@
       if (saved > 0) toast("📖 Retomando de onde você parou", "info");
       // Se o livro tem áudio humano sincronizado, entra nesse modo (toca o áudio
       // importado). Senão, segue no fluxo normal da narração por IA.
-      window.LeIA.synced.load(jobId).then((ok) => {
+      window.LeIA.synced.onOpen(jobId).then((ok) => {
         if (!ok) gatePlayUntilReady(jobId, audioReadyHint);
       });
     } catch (e) {

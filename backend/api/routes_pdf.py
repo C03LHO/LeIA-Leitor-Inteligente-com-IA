@@ -892,7 +892,25 @@ def sync_status(job_id: str):
         return j
     if _alignment_path(job_id).exists() and _find_synced_audio(job_id):
         return {"status": "done", "progress": 1.0}
+    # áudio importado mas alinhamento não concluído (app fechado no meio) → retomável
+    if _find_synced_audio(job_id):
+        return {"status": "incomplete"}
     return {"status": "none"}
+
+
+@router.post("/{job_id}/resync")
+def resync(job_id: str):
+    """Re-roda o alinhamento sobre o áudio já importado (ex.: app foi fechado
+    no meio da sincronização)."""
+    audio = _find_synced_audio(job_id)
+    if not audio:
+        raise HTTPException(status_code=404, detail="Nenhum áudio importado para este livro.")
+    cur = _sync_jobs.get(job_id, {}).get("status")
+    if cur in ("transcribing", "aligning"):
+        return {"status": cur}
+    _sync_jobs[job_id] = {"status": "transcribing", "progress": 0.0}
+    threading.Thread(target=_run_alignment, args=(job_id, audio), daemon=True, name=f"leia-sync-{job_id}").start()
+    return {"status": "transcribing"}
 
 
 @router.get("/{job_id}/alignment")

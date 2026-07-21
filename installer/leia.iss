@@ -3,7 +3,7 @@
 ; Use o Inno Setup 6.x: iscc.exe installer\leia.iss
 
 #define MyAppName "LeIA"
-#define MyAppVersion "1.6.8"
+#define MyAppVersion "1.6.9"
 #define MyAppPublisher "LeIA Project"
 #define MyAppURL "https://github.com/"
 #define MyAppExeName "leia.vbs"

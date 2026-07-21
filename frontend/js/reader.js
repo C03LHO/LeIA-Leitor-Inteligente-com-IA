@@ -23,7 +23,6 @@
     document.getElementById("doc-title").classList.remove("hidden");
     document.getElementById("btn-close-doc").classList.remove("hidden");
     document.getElementById("btn-find").classList.remove("hidden");
-    document.getElementById("btn-import-audio").classList.remove("hidden");
     document.getElementById("view-welcome").classList.add("hidden");
     document.getElementById("view-processing").classList.add("hidden");
     document.getElementById("main-body").classList.remove("hidden");
@@ -139,7 +138,6 @@
     document.getElementById("doc-title").classList.add("hidden");
     document.getElementById("btn-close-doc").classList.add("hidden");
     document.getElementById("btn-find").classList.add("hidden");
-    document.getElementById("btn-import-audio").classList.add("hidden");
     const fb = document.getElementById("find-bar");
     if (fb) fb.classList.add("hidden");
     document.getElementById("view-welcome").classList.remove("hidden");

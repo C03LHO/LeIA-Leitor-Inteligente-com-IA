@@ -31,12 +31,16 @@
   }
 
   function updateVoiceLabel() {
-    const v = state.voices.find((x) => x.id === state.selectedId);
     const el = document.getElementById("voice-label");
-    if (v && el) el.textContent = v.name;
+    if (!el) return;
+    if (window.LeIA.synced && window.LeIA.synced.isActive()) { el.textContent = "Voz humana"; return; }
+    const v = state.voices.find((x) => x.id === state.selectedId);
+    if (v) el.textContent = v.name;
   }
 
   async function selectVoice(id) {
+    // escolher uma voz de IA sai do modo "áudio humano importado"
+    if (window.LeIA.synced && window.LeIA.synced.isActive()) window.LeIA.synced.deactivate();
     state.selectedId = id;
     const v = state.voices.find((x) => x.id === id);
     if (v && window.LeIA.player) window.LeIA.player.setVoice(id, v.name);
@@ -75,9 +79,56 @@
     }
   }
 
+  function syncedActive() { return !!(window.LeIA.synced && window.LeIA.synced.isActive()); }
+
+  function audioSourceBlock() {
+    const jid = window.LeIA.currentJobId;
+    if (!jid) return null;   // sem livro aberto → só vozes de IA
+    const st = (window.LeIA.synced && window.LeIA.synced.getStatus)
+      ? window.LeIA.synced.getStatus() : { has: false, syncing: false };
+    const frag = document.createDocumentFragment();
+    const hdr = document.createElement("div");
+    hdr.className = "voices-group-label";
+    hdr.textContent = "Áudio deste livro";
+    frag.appendChild(hdr);
+
+    if (st.syncing) {
+      const it = document.createElement("div");
+      it.className = "voice-item";
+      it.innerHTML = `<div class="spinner" style="width:16px;height:16px;border-width:2px"></div>
+        <div class="voice-meta"><div class="voice-name">Sincronizando áudio…</div>
+        <div class="voice-desc">${st.pct || 0}% · pode continuar lendo com a voz da IA</div></div>`;
+      frag.appendChild(it);
+    } else if (st.has) {
+      const it = document.createElement("div");
+      it.className = "voice-item" + (syncedActive() ? " selected" : "");
+      it.innerHTML = `<div class="voice-radio"></div>
+        <div class="voice-meta"><div class="voice-name">🎧 Voz humana<span class="voice-badge">seu áudio</span></div>
+        <div class="voice-desc">Áudio importado, sincronizado com o texto.</div></div>
+        <button class="voice-delete-btn" title="Remover áudio importado">✕</button>`;
+      it.addEventListener("click", (e) => { if (e.target.closest(".voice-delete-btn")) return; window.LeIA.synced.activate(); });
+      it.querySelector(".voice-delete-btn").addEventListener("click", (e) => { e.stopPropagation(); window.LeIA.synced.removeSync(); });
+      frag.appendChild(it);
+    }
+
+    const imp = document.createElement("div");
+    imp.className = "voice-item";
+    imp.innerHTML = `<div class="voice-radio" style="border-style:dashed">＋</div>
+      <div class="voice-meta"><div class="voice-name">Importar áudio (voz humana)…</div>
+      <div class="voice-desc">Um mp3/m4b que você tem → sincroniza com este livro.</div></div>`;
+    imp.addEventListener("click", () => window.LeIA.synced.pickFile());
+    frag.appendChild(imp);
+
+    const lab = document.createElement("div");
+    lab.className = "voices-group-label";
+    lab.textContent = "Vozes da IA";
+    frag.appendChild(lab);
+    return frag;
+  }
+
   function voiceItem(v) {
     const item = document.createElement("div");
-    item.className = "voice-item" + (v.id === state.selectedId ? " selected" : "") + (v.recommended ? " recommended" : "");
+    item.className = "voice-item" + ((!syncedActive() && v.id === state.selectedId) ? " selected" : "") + (v.recommended ? " recommended" : "");
     item.innerHTML = `
       <div class="voice-radio"></div>
       <div class="voice-meta">
@@ -99,6 +150,8 @@
       const wrap = document.getElementById(wid);
       if (!wrap) return;
       wrap.innerHTML = "";
+      const asb = audioSourceBlock();
+      if (asb) wrap.appendChild(asb);
       state.voices.forEach((v) => wrap.appendChild(voiceItem(v)));
     });
   }
@@ -137,5 +190,5 @@
   }
 
   window.LeIA = window.LeIA || {};
-  window.LeIA.voices = { initVoices, refresh, selectVoice, state };
+  window.LeIA.voices = { initVoices, refresh, render, selectVoice, updateVoiceLabel, state };
 })();
