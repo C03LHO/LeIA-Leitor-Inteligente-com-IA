@@ -17,7 +17,7 @@ from backend.config import CACHE_DIR
 from backend.epub.extractor import build_epub_document, extract_epub_cover
 from backend.pdf.cleaner import CleaningConfig
 from backend.pdf.extractor import blocks_as_jsonable, extract_blocks, pdf_author, render_cover
-from backend.align.aligner import align_sentences, transcribe_words, whisper_available
+from backend.align.aligner import AlignmentCancelled, align_sentences, transcribe_words, whisper_available
 from backend.audio.audiobook import audiobook_path, build_audiobook, ffmpeg_available
 from backend.pdf.ocr import ocr_available, ocr_pdf_blocks
 from backend.share.lan import start_share
@@ -541,6 +541,7 @@ def audio_queue_state():
             "job_id": jid,
             "title": e.get("title") or e.get("filename", "PDF"),
             "status": status,
+            "kind": "tts",
             "done": aj.get("done", 0),
             "total": aj.get("total", 0),
             "eta": aj.get("eta", 0),
@@ -554,6 +555,18 @@ def audio_queue_state():
         items.append(entry(_audio_active, "preparing"))
     for jid in list(_queued):
         items.append(entry(jid, "queued"))
+    # sincronizações de áudio (voz humana) em andamento — também aparecem na fila
+    for jid, sj in list(_sync_jobs.items()):
+        if sj.get("status") in ("transcribing", "aligning"):
+            e = lib.get(jid, {})
+            items.append({
+                "job_id": jid,
+                "title": e.get("title") or e.get("filename", "Livro"),
+                "status": "syncing",
+                "kind": "sync",
+                "pct": round(float(sj.get("progress", 0)) * 100),
+                "phase": "Aligning" if sj.get("status") == "aligning" else "Transcrevendo o áudio",
+            })
     return {"active": _audio_active, "count": len(items), "items": items}
 
 
@@ -799,6 +812,7 @@ async def extract_sync(file: UploadFile):
 _SYNC_AUDIO_EXTS = (".mp3", ".m4a", ".m4b", ".wav", ".ogg", ".opus", ".aac", ".flac")
 _ALIGN_MODEL = "small"
 _sync_jobs: dict[str, dict] = {}
+_sync_cancelled: set[str] = set()
 
 
 def _synced_dir() -> Path:
@@ -832,6 +846,7 @@ def _sentences_with_ids(result: dict) -> list[dict]:
 
 def _run_alignment(job_id: str, audio_path: Path) -> None:
     try:
+        _sync_cancelled.discard(job_id)
         _sync_jobs[job_id] = {"status": "transcribing", "progress": 0.0}
         result = json.loads(pdf_result_path(job_id).read_text(encoding="utf-8"))
         sentences = _sentences_with_ids(result)
@@ -843,7 +858,12 @@ def _run_alignment(job_id: str, audio_path: Path) -> None:
             if j is not None:
                 j["progress"] = round(p, 3)
 
-        words = transcribe_words(audio_path, _ALIGN_MODEL, progress_cb=prog)
+        words = transcribe_words(
+            audio_path, _ALIGN_MODEL, progress_cb=prog,
+            cancel_cb=lambda: job_id in _sync_cancelled,
+        )
+        if job_id in _sync_cancelled:
+            raise AlignmentCancelled()
         if not words:
             raise RuntimeError("Não consegui entender o áudio (fala não reconhecida).")
         _sync_jobs[job_id] = {"status": "aligning", "progress": 0.99}
@@ -856,6 +876,10 @@ def _run_alignment(job_id: str, audio_path: Path) -> None:
         _library_put(job_id, synced=True)
         _sync_jobs[job_id] = {"status": "done", "progress": 1.0, "count": len(aligned), "matched": matched}
         logger.info("Sincronizado job %s: %d frases (%d casadas)", job_id, len(aligned), matched)
+    except AlignmentCancelled:
+        _sync_jobs.pop(job_id, None)
+        _sync_cancelled.discard(job_id)
+        logger.info("Sincronização cancelada (job %s)", job_id)
     except Exception as exc:
         logger.exception("Falha ao sincronizar áudio (job %s)", job_id)
         _sync_jobs[job_id] = {"status": "error", "error": str(exc)}
@@ -941,5 +965,20 @@ def delete_synced_audio(job_id: str):
         old.unlink(missing_ok=True)
     _alignment_path(job_id).unlink(missing_ok=True)
     _sync_jobs.pop(job_id, None)
+    _library_put(job_id, synced=False)
+    return {"ok": True}
+
+
+@router.post("/{job_id}/cancel-sync")
+def cancel_sync(job_id: str):
+    """Cancela a sincronização em andamento e apaga o áudio importado (para não
+    re-sincronizar sozinho ao reabrir o livro)."""
+    _sync_cancelled.add(job_id)   # a thread de transcrição para no próximo segmento
+    if _sync_jobs.get(job_id, {}).get("status") not in ("transcribing", "aligning"):
+        _sync_jobs.pop(job_id, None)
+    old = _find_synced_audio(job_id)
+    if old:
+        old.unlink(missing_ok=True)
+    _alignment_path(job_id).unlink(missing_ok=True)
     _library_put(job_id, synced=False)
     return {"ok": True}

@@ -17,6 +17,10 @@ from backend.utils.logging import get_logger
 logger = get_logger("align.aligner")
 
 
+class AlignmentCancelled(Exception):
+    """Sinaliza que a sincronização foi cancelada pelo usuário."""
+
+
 def whisper_available() -> bool:
     try:
         import faster_whisper  # noqa: F401
@@ -32,8 +36,9 @@ def _norm(word: str) -> str:
     return re.sub(r"[^a-z0-9]", "", w.lower())
 
 
-def transcribe_words(audio_path: str | Path, model_size: str = "small", progress_cb=None) -> list[dict]:
-    """Transcreve o áudio e devolve [{n, start, end}] por palavra (n = normalizada)."""
+def transcribe_words(audio_path: str | Path, model_size: str = "small", progress_cb=None, cancel_cb=None) -> list[dict]:
+    """Transcreve o áudio e devolve [{n, start, end}] por palavra (n = normalizada).
+    cancel_cb(): se devolver True entre segmentos, aborta com AlignmentCancelled."""
     from faster_whisper import WhisperModel
     import torch
 
@@ -47,6 +52,8 @@ def transcribe_words(audio_path: str | Path, model_size: str = "small", progress
     total = float(getattr(info, "duration", 0) or 0)
     words: list[dict] = []
     for seg in segments:
+        if cancel_cb and cancel_cb():
+            raise AlignmentCancelled()
         for w in (seg.words or []):
             n = _norm(w.word)
             if n:

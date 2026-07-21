@@ -481,6 +481,15 @@
     catch (e) { toast("Falha ao cancelar: " + e.message, "danger"); }
   }
 
+  async function cancelSync(jobId) {
+    try {
+      await window.LeIA.api.postJSON(`/api/pdf/${jobId}/cancel-sync`, {});
+      toast("Sincronização cancelada e áudio removido", "info");
+      if (window.LeIA.synced && jobId === window.LeIA.currentJobId) window.LeIA.synced.unload();
+      refreshQueue();
+    } catch (e) { toast("Falha ao cancelar: " + e.message, "danger"); }
+  }
+
   function activeVoiceName() {
     try {
       const s = window.LeIA.voices && window.LeIA.voices.state;
@@ -507,16 +516,18 @@
     }
     empty.classList.add("hidden");
     const active = items.find((it) => it.status === "preparing");
-    const upnext = items.filter((it) => it.status !== "preparing");
+    const syncs = items.filter((it) => it.kind === "sync");
+    const upnext = items.filter((it) => it.status !== "preparing" && it.kind !== "sync");
 
+    let html = "";
     if (active) {
       const pct = active.total ? Math.round((active.done / active.total) * 100) : 0;
       const stage = active.done === 0 ? "🔊 Carregando a voz…" : "Preparando narração";
       const spd = active.rate > 0 ? `${Math.round(active.rate * 60)} frases/min` : "—";
       const eta = active.eta > 0 ? "~" + fmtDur(active.eta) : "calculando…";
       const el = active.elapsed > 0 ? fmtDur(active.elapsed) : "—";
-      activeWrap.innerHTML = `
-        <div class="dl-hero">
+      html += `
+        <div class="dl-hero" data-job="${active.job_id}" data-kind="tts">
           ${coverBlock(active.job_id, "dl-hero-cover")}
           <div class="dl-hero-info">
             <div class="dl-hero-title">${escapeHTML(active.title)}</div>
@@ -534,10 +545,27 @@
           </div>
           <button class="dl-hero-cancel" title="Cancelar preparo">Cancelar</button>
         </div>`;
-      activeWrap.querySelector(".dl-hero-cancel").addEventListener("click", () => cancelPrep(active.job_id));
-    } else {
-      activeWrap.innerHTML = "";
     }
+    syncs.forEach((s) => {
+      html += `
+        <div class="dl-hero" data-job="${s.job_id}" data-kind="sync">
+          ${coverBlock(s.job_id, "dl-hero-cover")}
+          <div class="dl-hero-info">
+            <div class="dl-hero-title">${escapeHTML(s.title)}</div>
+            <div class="dl-hero-stage">🎧 Sincronizando áudio (voz humana)</div>
+            <div class="dl-hero-bar"><div class="dl-hero-fill" style="width:${s.pct || 0}%"></div></div>
+            <div class="dl-hero-line"><span>${escapeHTML(s.phase || "Sincronizando")} · <b>${s.pct || 0}%</b></span></div>
+          </div>
+          <button class="dl-hero-cancel" title="Cancelar sincronização">Cancelar</button>
+        </div>`;
+    });
+    activeWrap.innerHTML = html;
+    activeWrap.querySelectorAll(".dl-hero").forEach((elm) => {
+      const job = elm.getAttribute("data-job");
+      const kind = elm.getAttribute("data-kind");
+      const b = elm.querySelector(".dl-hero-cancel");
+      if (b) b.addEventListener("click", () => (kind === "sync" ? cancelSync(job) : cancelPrep(job)));
+    });
 
     upHead.classList.toggle("hidden", upnext.length === 0);
     upHead.textContent = `A seguir (${upnext.length})`;
