@@ -12,9 +12,16 @@ import re
 import unicodedata
 from pathlib import Path
 
+import numpy as np
+
 from backend.utils.logging import get_logger
 
 logger = get_logger("align.aligner")
+
+# Só uma sequência de >=N palavras iguais vira "âncora" de tempo. Isso evita
+# casar palavrinhas comuns ("o", "a", "de", "que") no lugar errado, que era o
+# que fazia o destaque não bater com o áudio.
+_MIN_ANCHOR = 3
 
 
 class AlignmentCancelled(Exception):
@@ -63,10 +70,12 @@ def transcribe_words(audio_path: str | Path, model_size: str = "small", progress
     return words
 
 
-def align_sentences(sentences: list[dict], asr_words: list[dict]) -> list[dict]:
-    """Casa as frases do livro com as palavras transcritas → [{id, start, end}].
+def align_sentences(sentences: list[dict], asr_words: list[dict]) -> tuple[list[dict], float]:
+    """Casa as frases do livro com as palavras transcritas.
 
-    sentences: [{id, text}] na ordem do livro. asr_words: saída de transcribe_words.
+    Devolve (lista [{id, start, end}], confiança 0..1). A confiança é a fração de
+    palavras do livro cobertas por âncoras FORTES — baixa = o áudio provavelmente
+    não bate com o texto (edição diferente, muito ruído/OCR, etc.).
     """
     # 1) palavras de referência (do livro), guardando a frase de cada uma
     ref: list[tuple[str, int]] = []
@@ -75,42 +84,46 @@ def align_sentences(sentences: list[dict], asr_words: list[dict]) -> list[dict]:
             n = _norm(tok)
             if n:
                 ref.append((n, si))
+    n_ref = len(ref)
     if not ref or not asr_words:
-        return []
+        return [], 0.0
 
     ref_norm = [r[0] for r in ref]
     asr_norm = [w["n"] for w in asr_words]
-
-    # 2) alinhamento de sequência ref <-> asr
     sm = difflib.SequenceMatcher(a=ref_norm, b=asr_norm, autojunk=False)
-    ref_time: list[float | None] = [None] * len(ref)
-    for a0, b0, size in sm.get_matching_blocks():
-        for k in range(size):
-            ref_time[a0 + k] = asr_words[b0 + k]["start"]
 
-    # 3) preenche tempos faltantes (âncoras + interpolação linear + monotônico)
-    anchors = [i for i, t in enumerate(ref_time) if t is not None]
-    if not anchors:
-        return []
-    first, last = anchors[0], anchors[-1]
-    for i in range(first):
-        ref_time[i] = ref_time[first]
-    for i in range(last + 1, len(ref_time)):
-        ref_time[i] = ref_time[last]
-    for a, b in zip(anchors, anchors[1:]):
-        if b > a + 1:
-            ta, tb = ref_time[a], ref_time[b]
-            for k in range(a + 1, b):
-                ref_time[k] = ta + (tb - ta) * (k - a) / (b - a)
-    for i in range(1, len(ref_time)):
-        if ref_time[i] < ref_time[i - 1]:
-            ref_time[i] = ref_time[i - 1]
+    # 2) âncoras: só blocos de >=_MIN_ANCHOR palavras iguais (confiáveis)
+    xs: list[int] = []
+    ts: list[float] = []
+    strong = 0
+    for a0, b0, size in sm.get_matching_blocks():
+        if size >= _MIN_ANCHOR:
+            strong += size
+            xs.append(a0); ts.append(asr_words[b0]["start"])
+            xs.append(a0 + size - 1); ts.append(asr_words[b0 + size - 1]["start"])
+    # sem âncoras fortes o bastante → aceita qualquer match (melhor que nada)
+    if len(xs) < 2:
+        for a0, b0, size in sm.get_matching_blocks():
+            for k in range(size):
+                xs.append(a0 + k); ts.append(asr_words[b0 + k]["start"])
+    if len(xs) < 2:
+        return [], 0.0
+
+    # 3) mapa palavra_do_livro -> tempo, por interpolação entre âncoras
+    ax = np.asarray(xs, dtype=float)
+    at = np.asarray(ts, dtype=float)
+    order = np.argsort(ax, kind="stable")
+    ax, at = ax[order], at[order]
+    keep = np.concatenate(([True], np.diff(ax) > 0))   # xs estritamente crescente
+    ax, at = ax[keep], at[keep]
+    at = np.maximum.accumulate(at)                      # tempo nunca anda pra trás
+    times = np.interp(np.arange(n_ref), ax, at)         # extrapola "plano" nas pontas
 
     # 4) início/fim por frase
     sent_start: dict[int, float] = {}
     sent_end: dict[int, float] = {}
     for i, (_, si) in enumerate(ref):
-        t = float(ref_time[i])
+        t = float(times[i])
         sent_start.setdefault(si, t)
         sent_end[si] = t
 
@@ -118,7 +131,7 @@ def align_sentences(sentences: list[dict], asr_words: list[dict]) -> list[dict]:
     out: list[dict] = []
     for si, s in enumerate(sentences):
         start = sent_start.get(si)
-        if start is None:  # frase sem palavras casadas → cola no anterior
+        if start is None:
             start = out[-1]["end"] if out else 0.0
             end = start
         else:
@@ -127,9 +140,10 @@ def align_sentences(sentences: list[dict], asr_words: list[dict]) -> list[dict]:
 
     # 5) fim de cada frase = início da próxima (destaque contínuo); último = fim do áudio
     for i in range(len(out) - 1):
-        nxt = out[i + 1]["start"]
-        if nxt > out[i]["end"]:
-            out[i]["end"] = nxt
+        if out[i + 1]["start"] > out[i]["end"]:
+            out[i]["end"] = out[i + 1]["start"]
     if out:
         out[-1]["end"] = max(out[-1]["end"], audio_end)
-    return out
+
+    confidence = round(strong / n_ref, 3) if n_ref else 0.0
+    return out, confidence

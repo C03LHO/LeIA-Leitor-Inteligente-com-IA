@@ -811,6 +811,7 @@ async def extract_sync(file: UploadFile):
 # --------------------------------------------------------------------------- #
 _SYNC_AUDIO_EXTS = (".mp3", ".m4a", ".m4b", ".wav", ".ogg", ".opus", ".aac", ".flac")
 _ALIGN_MODEL = "small"
+_ALGO_VERSION = 2   # muda quando o algoritmo de alinhamento melhora → força re-sync
 _sync_jobs: dict[str, dict] = {}
 _sync_cancelled: set[str] = set()
 
@@ -867,15 +868,14 @@ def _run_alignment(job_id: str, audio_path: Path) -> None:
         if not words:
             raise RuntimeError("Não consegui entender o áudio (fala não reconhecida).")
         _sync_jobs[job_id] = {"status": "aligning", "progress": 0.99}
-        aligned = align_sentences(sentences, words)
-        matched = sum(1 for a in aligned if a["end"] > a["start"])
+        aligned, confidence = align_sentences(sentences, words)
         _alignment_path(job_id).write_text(
-            json.dumps({"audio": audio_path.name, "sentences": aligned}, ensure_ascii=False),
+            json.dumps({"audio": audio_path.name, "algo": _ALGO_VERSION, "confidence": confidence, "sentences": aligned}, ensure_ascii=False),
             encoding="utf-8",
         )
         _library_put(job_id, synced=True)
-        _sync_jobs[job_id] = {"status": "done", "progress": 1.0, "count": len(aligned), "matched": matched}
-        logger.info("Sincronizado job %s: %d frases (%d casadas)", job_id, len(aligned), matched)
+        _sync_jobs[job_id] = {"status": "done", "progress": 1.0, "count": len(aligned), "confidence": confidence}
+        logger.info("Sincronizado job %s: %d frases (confiança %.2f)", job_id, len(aligned), confidence)
     except AlignmentCancelled:
         _sync_jobs.pop(job_id, None)
         _sync_cancelled.discard(job_id)

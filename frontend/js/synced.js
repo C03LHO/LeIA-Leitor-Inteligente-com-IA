@@ -27,10 +27,12 @@
     S.active = false; S.map = []; S.byId = new Map(); S.curId = null;
   }
 
-  async function load(jobId) {
+  const ALGO_VERSION = 2;   // deve casar com _ALGO_VERSION no backend
+
+  async function load(jobId, al) {
     unload();
     try {
-      const al = await api().getJSON(`/api/pdf/${jobId}/alignment`);
+      if (!al) al = await api().getJSON(`/api/pdf/${jobId}/alignment`);
       const sents = (al.sentences || []).filter((x) => x && x.id && window.LeIA.reader.state.sentenceById.has(x.id));
       if (!sents.length) return false;
       S.map = sents.slice().sort((a, b) => a.start - b.start);
@@ -155,7 +157,17 @@
   // chamado ao ABRIR um livro → decide o modo (humano x IA) e religa o progresso
   async function onOpen(jobId) {
     const st = await refreshStatus(jobId);
-    if (st.has && getPref(jobId) !== "ai") { await load(jobId); return true; }
+    if (st.has && getPref(jobId) !== "ai") {
+      const al = await api().getJSON(`/api/pdf/${jobId}/alignment`).catch(() => null);
+      if (al && (al.algo || 0) < ALGO_VERSION) {
+        // alinhamento de uma versão ANTIGA do algoritmo (batia mal) → refaz sozinho
+        window.LeIA.toast("Melhorando a sincronização deste livro…", "info");
+        S.status = { has: false, syncing: true, incomplete: false, pct: 0 };
+        resync(jobId);
+        return false;
+      }
+      if (al && (await load(jobId, al))) return true;
+    }
     if (st.syncing) { setStatus(`Sincronizando o áudio… ${st.pct}%`); pollSync(jobId); }
     else if (st.incomplete) { resync(jobId); }   // app fechou no meio → retoma sozinho
     return false;
@@ -172,7 +184,13 @@
       } else if (s.status === "done") {
         setStatus("");
         S.status = { has: true, syncing: false, incomplete: false, pct: 100 };
-        window.LeIA.toast("✅ Áudio sincronizado com o livro!", "success");
+        if (typeof s.confidence === "number" && s.confidence < 0.35) {
+          window.LeIA.toast(
+            "⚠️ Sincronização APROXIMADA: o áudio não casou bem com o texto (edição/qualidade diferentes). O destaque pode não bater.",
+            "warning", 9000);
+        } else {
+          window.LeIA.toast("✅ Áudio sincronizado com o livro!", "success");
+        }
         if (jid === window.LeIA.currentJobId && getPref(jid) !== "ai") load(jid);
         if (window.LeIA.voices) window.LeIA.voices.render();
       } else if (s.status === "error") {
